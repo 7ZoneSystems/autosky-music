@@ -12,6 +12,8 @@ A Vercel-ready browser tool for composing Sky: Children of the Light piano sheet
 
 Static composing and local MP3 analysis work without MiMo. The "Refine with MiMo" button requires the serverless API route and `MIMO_API_KEY`.
 
+The build creates a generated `public/` directory for Vercel from the root static files. `public/` is ignored by Git.
+
 ## Vercel Environment Variables
 
 Set these in Vercel Project Settings -> Environment Variables:

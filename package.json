@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "vercel dev",
-    "build": "node --check app.js && node --check api/mimo-refine.js",
+    "dev": "npm run build && vercel dev",
+    "build": "node --check app.js && node --check api/mimo-refine.js && mkdir -p public && cp index.html styles.css app.js public/",
     "start": "vercel dev"
   },
   "devDependencies": {
