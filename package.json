@@ -1,0 +1,13 @@
+{
+  "name": "sky-piano-sheet-maker",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "vercel dev",
+    "build": "node --check app.js && node --check api/mimo-refine.js",
+    "start": "vercel dev"
+  },
+  "devDependencies": {
+    "vercel": "^39.0.0"
+  }
+}

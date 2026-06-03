@@ -139,6 +139,80 @@
           </div>
         </aside>
 
+        <section class="panel audio-panel" aria-labelledby="audioTitle">
+          <div class="panel-heading">
+            <div>
+              <h2 id="audioTitle">Audio To Chords</h2>
+              <p id="audioStatus">No MP3 loaded</p>
+            </div>
+            <div class="transport">
+              <button id="analyzeAudioBtn" class="primary-button" type="button">Analyze MP3</button>
+              <button id="refineChordsBtn" class="ghost-button" type="button" disabled>Refine with MiMo</button>
+              <button id="importChordsBtn" class="ghost-button" type="button" disabled>Import playable</button>
+            </div>
+          </div>
+
+          <div class="audio-grid">
+            <label>
+              <span>MP3 file</span>
+              <input id="audioFileInput" type="file" accept="audio/mpeg,audio/mp3,audio/*">
+            </label>
+            <label>
+              <span>Window</span>
+              <select id="analysisWindowSelect">
+                <option value="0.75">0.75 sec</option>
+                <option value="1" selected>1 sec</option>
+                <option value="1.5">1.5 sec</option>
+                <option value="2">2 sec</option>
+              </select>
+            </label>
+            <label>
+              <span>Minimum chord</span>
+              <select id="minChordSelect">
+                <option value="1">1 sec</option>
+                <option value="2" selected>2 sec</option>
+                <option value="3">3 sec</option>
+                <option value="4">4 sec</option>
+              </select>
+            </label>
+            <label>
+              <span>Sensitivity</span>
+              <input id="chordSensitivityInput" type="range" min="0.52" max="0.86" step="0.02" value="0.62">
+            </label>
+          </div>
+
+          <div class="audio-stats">
+            <div>
+              <span class="eyebrow">Detected key</span>
+              <strong id="detectedKeyText">-</strong>
+              <button id="useDetectedKeyBtn" class="mini-button" type="button" disabled>Use key</button>
+            </div>
+            <div>
+              <span class="eyebrow">Chords</span>
+              <strong id="chordCountText">0</strong>
+            </div>
+            <div>
+              <span class="eyebrow">Playable in Sky key</span>
+              <strong id="playableCountText">0</strong>
+            </div>
+            <div>
+              <span class="eyebrow">Duration</span>
+              <strong id="audioDurationText">-</strong>
+            </div>
+          </div>
+
+          <div class="chord-output-grid">
+            <label>
+              <span>Minimal chord format</span>
+              <textarea id="chordOutputText" spellcheck="false" readonly></textarea>
+            </label>
+            <div>
+              <span class="eyebrow">Chord map</span>
+              <div id="chordResultList" class="chord-result-list"></div>
+            </div>
+          </div>
+        </section>
+
         <section class="panel export-panel" aria-labelledby="exportTitle">
           <div class="panel-heading">
             <div>

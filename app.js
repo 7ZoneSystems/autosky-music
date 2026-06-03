@@ -179,6 +179,50 @@ const KEY_CONFIGS = [
 ];
 
 const NOTE_STEPS = [0, 2, 4, 5, 7, 9, 11, 12, 14, 16, 17, 19, 21, 23, 24];
+const PC_NAMES_SHARP = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const PC_NAMES_FLAT = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+const FLAT_KEY_IDS = new Set(["Db", "Eb", "F", "Gb", "Ab", "Bb"]);
+const SKY_KEY_BY_PC = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+const NOTE_TO_PC = {
+  C: 0,
+  "C#": 1,
+  Db: 1,
+  D: 2,
+  "D#": 3,
+  Eb: 3,
+  E: 4,
+  Fb: 4,
+  "E#": 5,
+  F: 5,
+  "F#": 6,
+  Gb: 6,
+  G: 7,
+  "G#": 8,
+  Ab: 8,
+  A: 9,
+  "A#": 10,
+  Bb: 10,
+  B: 11,
+  Cb: 11,
+  "B#": 0
+};
+const CHORD_TEMPLATES = [
+  { suffix: "", name: "major", intervals: [0, 4, 7] },
+  { suffix: "m", name: "minor", intervals: [0, 3, 7] },
+  { suffix: "sus2", name: "sus2", intervals: [0, 2, 7] },
+  { suffix: "sus4", name: "sus4", intervals: [0, 5, 7] },
+  { suffix: "dim", name: "diminished", intervals: [0, 3, 6] },
+  { suffix: "aug", name: "augmented", intervals: [0, 4, 8] },
+  { suffix: "7", name: "dominant seventh", intervals: [0, 4, 7, 10] },
+  { suffix: "maj7", name: "major seventh", intervals: [0, 4, 7, 11] },
+  { suffix: "m7", name: "minor seventh", intervals: [0, 3, 7, 10] },
+  { suffix: "6", name: "major sixth", intervals: [0, 4, 7, 9] },
+  { suffix: "m6", name: "minor sixth", intervals: [0, 3, 7, 9] }
+];
+const MAJOR_KEY_PROFILE = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88];
+const ANALYSIS_MIDI_START = 36;
+const ANALYSIS_MIDI_END = 83;
+const TWO_PI = Math.PI * 2;
 const KEY_ALIASES = new Map();
 KEY_CONFIGS.forEach((config) => {
   KEY_ALIASES.set(config.id.toLowerCase(), config.id);
@@ -192,7 +236,14 @@ const state = {
   duration: 1,
   bpm: 96,
   pending: [],
-  events: []
+  events: [],
+  chordAnalysis: {
+    fileName: "",
+    duration: 0,
+    keyGuess: null,
+    segments: [],
+    refinedText: ""
+  }
 };
 
 const els = {
@@ -229,7 +280,22 @@ const els = {
   importNumbersBtn: document.querySelector("#importNumbersBtn"),
   exportFormat: document.querySelector("#exportFormat"),
   exportText: document.querySelector("#exportText"),
-  copyExportBtn: document.querySelector("#copyExportBtn")
+  copyExportBtn: document.querySelector("#copyExportBtn"),
+  audioFileInput: document.querySelector("#audioFileInput"),
+  analyzeAudioBtn: document.querySelector("#analyzeAudioBtn"),
+  refineChordsBtn: document.querySelector("#refineChordsBtn"),
+  importChordsBtn: document.querySelector("#importChordsBtn"),
+  analysisWindowSelect: document.querySelector("#analysisWindowSelect"),
+  minChordSelect: document.querySelector("#minChordSelect"),
+  chordSensitivityInput: document.querySelector("#chordSensitivityInput"),
+  audioStatus: document.querySelector("#audioStatus"),
+  detectedKeyText: document.querySelector("#detectedKeyText"),
+  useDetectedKeyBtn: document.querySelector("#useDetectedKeyBtn"),
+  chordCountText: document.querySelector("#chordCountText"),
+  playableCountText: document.querySelector("#playableCountText"),
+  audioDurationText: document.querySelector("#audioDurationText"),
+  chordOutputText: document.querySelector("#chordOutputText"),
+  chordResultList: document.querySelector("#chordResultList")
 };
 
 let audioContext;
@@ -250,6 +316,45 @@ function getButton(id) {
 
 function getCellNote(id) {
   return flattenRows(currentConfig().rows)[id - 1];
+}
+
+function normalizePc(pc) {
+  return ((pc % 12) + 12) % 12;
+}
+
+function noteNameToPc(note) {
+  return NOTE_TO_PC[note] ?? 0;
+}
+
+function prefersFlatNames(keyId = state.keyId) {
+  return FLAT_KEY_IDS.has(keyId);
+}
+
+function noteNameForPc(pc, keyId = state.keyId) {
+  const names = prefersFlatNames(keyId) ? PC_NAMES_FLAT : PC_NAMES_SHARP;
+  return names[normalizePc(pc)];
+}
+
+function chordLabel(rootPc, template, keyId = state.keyId) {
+  if (!template) return "N.C.";
+  return `${noteNameForPc(rootPc, keyId)}${template.suffix}`;
+}
+
+function midiToFrequency(midi) {
+  return 440 * Math.pow(2, (midi - 69) / 12);
+}
+
+function formatTime(seconds) {
+  const safeSeconds = Math.max(0, seconds);
+  const minutes = Math.floor(safeSeconds / 60);
+  const wholeSeconds = Math.floor(safeSeconds % 60);
+  return `${String(minutes).padStart(2, "0")}:${String(wholeSeconds).padStart(2, "0")}`;
+}
+
+function formatDuration(seconds) {
+  if (!Number.isFinite(seconds)) return "-";
+  if (seconds < 60) return `${seconds.toFixed(1)}s`;
+  return `${formatTime(seconds)}.${String(Math.round((seconds % 1) * 10))}`;
 }
 
 function labelForButton(button, notation = state.notation) {
@@ -403,6 +508,136 @@ function renderExport() {
   els.exportText.value = getExportText();
 }
 
+function chordPcs(segment) {
+  if (!segment || segment.label === "N.C." || !Array.isArray(segment.intervals)) return [];
+  return [...new Set(segment.intervals.map((interval) => normalizePc(segment.rootPc + interval)))];
+}
+
+function chooseSkyButtonsForPcs(pcs) {
+  if (!pcs.length) return null;
+  const gridPcs = flattenRows(currentConfig().rows).map(noteNameToPc);
+  const options = pcs.map((pc) => {
+    return gridPcs
+      .map((gridPc, index) => (gridPc === pc ? index + 1 : null))
+      .filter((id) => id !== null);
+  });
+
+  if (options.some((items) => items.length === 0)) return null;
+
+  let best = null;
+  let bestScore = Infinity;
+
+  function search(index, picked) {
+    if (index === options.length) {
+      const sorted = [...picked].sort((a, b) => a - b);
+      const range = sorted[sorted.length - 1] - sorted[0];
+      const centerCost = sorted.reduce((sum, id) => sum + Math.abs(id - 8), 0) * 0.08;
+      const rowCost = sorted.reduce((sum, id) => sum + Math.floor((id - 1) / 5), 0) * 0.03;
+      const score = range + centerCost + rowCost;
+      if (score < bestScore) {
+        best = sorted;
+        bestScore = score;
+      }
+      return;
+    }
+
+    options[index].forEach((id) => {
+      if (!picked.includes(id)) {
+        picked.push(id);
+        search(index + 1, picked);
+        picked.pop();
+      }
+    });
+  }
+
+  search(0, []);
+  return best;
+}
+
+function skyTextForButtons(buttonIds) {
+  return buttonIds.map((id) => getButton(id).abc).join("+");
+}
+
+function displayChordLabel(segment) {
+  if (!segment || segment.label === "N.C.") return "N.C.";
+  return `${noteNameForPc(segment.rootPc)}${segment.suffix || ""}`;
+}
+
+function mappingForChord(segment) {
+  const pcs = chordPcs(segment);
+  const buttonIds = chooseSkyButtonsForPcs(pcs);
+  if (!buttonIds) return null;
+  return {
+    buttonIds,
+    text: skyTextForButtons(buttonIds)
+  };
+}
+
+function playableChordSegments() {
+  return state.chordAnalysis.segments.filter((segment) => segment.label !== "N.C." && mappingForChord(segment));
+}
+
+function renderChordAnalysis() {
+  if (!els.chordResultList) return;
+  const analysis = state.chordAnalysis;
+  const segments = analysis.segments;
+  const playable = playableChordSegments();
+
+  els.audioDurationText.textContent = analysis.duration ? formatTime(analysis.duration) : "-";
+  els.chordCountText.textContent = String(segments.filter((segment) => segment.label !== "N.C.").length);
+  els.playableCountText.textContent = String(playable.length);
+  els.importChordsBtn.disabled = playable.length === 0;
+  els.refineChordsBtn.disabled = segments.length === 0;
+
+  if (analysis.keyGuess) {
+    els.detectedKeyText.textContent = `${analysis.keyGuess.label} (${analysis.keyGuess.score.toFixed(2)})`;
+    els.useDetectedKeyBtn.disabled = false;
+  } else {
+    els.detectedKeyText.textContent = "-";
+    els.useDetectedKeyBtn.disabled = true;
+  }
+
+  if (!segments.length) {
+    els.chordOutputText.value = "";
+    els.chordResultList.innerHTML = '<div class="chord-row"><span class="name">No chords yet</span></div>';
+    return;
+  }
+
+  const outputLines = segments.map((segment) => {
+    const mapping = mappingForChord(segment);
+    const label = displayChordLabel(segment);
+    const skyText = segment.label === "N.C." ? "rest" : mapping ? mapping.text : "not in selected Sky key";
+    return `${formatTime(segment.start)}-${formatTime(segment.end)} | ${label} | ${skyText} | ${segment.score.toFixed(2)}`;
+  });
+  els.chordOutputText.value = analysis.refinedText || outputLines.join("\n");
+
+  els.chordResultList.innerHTML = "";
+  segments.forEach((segment) => {
+    const mapping = mappingForChord(segment);
+    const row = document.createElement("div");
+    row.className = "chord-row";
+
+    const time = document.createElement("span");
+    time.className = "time";
+    time.textContent = `${formatTime(segment.start)}-${formatTime(segment.end)}`;
+
+    const name = document.createElement("span");
+    name.className = "name";
+    name.textContent = displayChordLabel(segment);
+
+    const sky = document.createElement("span");
+    sky.className = "sky";
+    sky.textContent = segment.label === "N.C." ? "rest" : mapping ? mapping.text : "not in key";
+
+    const score = document.createElement("span");
+    score.className = "score";
+    score.textContent = segment.score.toFixed(2);
+
+    row.append(time, name, sky, score);
+    els.chordResultList.append(row);
+  });
+}
+
 function renderAll() {
   renderMode();
   renderPiano();
@@ -410,6 +645,7 @@ function renderAll() {
   renderKeyData();
   renderTimeline();
   renderExport();
+  renderChordAnalysis();
 }
 
 function addNoteEvent(notes) {
@@ -603,9 +839,460 @@ function importSheet(mode) {
   setStatus(`Imported ${nextEvents.length} boxes`);
 }
 
+function setAudioStatus(text) {
+  els.audioStatus.textContent = text;
+}
+
+function downmixAudioBuffer(buffer) {
+  const length = buffer.length;
+  const channels = buffer.numberOfChannels;
+  const mono = new Float32Array(length);
+  for (let channel = 0; channel < channels; channel += 1) {
+    const data = buffer.getChannelData(channel);
+    for (let index = 0; index < length; index += 1) {
+      mono[index] += data[index] / channels;
+    }
+  }
+  return mono;
+}
+
+function resampleLinear(samples, sourceRate, targetRate) {
+  if (sourceRate === targetRate) return samples;
+  const ratio = sourceRate / targetRate;
+  const outputLength = Math.max(1, Math.floor(samples.length / ratio));
+  const output = new Float32Array(outputLength);
+
+  for (let index = 0; index < outputLength; index += 1) {
+    const sourceIndex = index * ratio;
+    const left = Math.floor(sourceIndex);
+    const right = Math.min(samples.length - 1, left + 1);
+    const fraction = sourceIndex - left;
+    output[index] = samples[left] * (1 - fraction) + samples[right] * fraction;
+  }
+
+  return output;
+}
+
+function buildAnalysisKernel(sampleRate, frameLength) {
+  const window = new Float32Array(frameLength);
+  for (let index = 0; index < frameLength; index += 1) {
+    window[index] = 0.5 - 0.5 * Math.cos((TWO_PI * index) / Math.max(1, frameLength - 1));
+  }
+
+  const bins = [];
+  for (let midi = ANALYSIS_MIDI_START; midi <= ANALYSIS_MIDI_END; midi += 1) {
+    const frequency = midiToFrequency(midi);
+    bins.push({
+      midi,
+      pc: normalizePc(midi),
+      coeff: 2 * Math.cos((TWO_PI * frequency) / sampleRate),
+      weight: 1 / (1 + Math.max(0, midi - 48) * 0.012)
+    });
+  }
+
+  return { sampleRate, frameLength, window, bins };
+}
+
+function frameRms(samples, start, frameLength, window) {
+  let energy = 0;
+  for (let index = 0; index < frameLength; index += 1) {
+    const sample = samples[start + index] || 0;
+    const weighted = sample * window[index];
+    energy += weighted * weighted;
+  }
+  return Math.sqrt(energy / frameLength);
+}
+
+function goertzelPower(samples, start, frameLength, coeff, window) {
+  let s0 = 0;
+  let s1 = 0;
+  let s2 = 0;
+
+  for (let index = 0; index < frameLength; index += 1) {
+    const sample = (samples[start + index] || 0) * window[index];
+    s0 = sample + coeff * s1 - s2;
+    s2 = s1;
+    s1 = s0;
+  }
+
+  return s1 * s1 + s2 * s2 - coeff * s1 * s2;
+}
+
+function normalizeVector(vector) {
+  const total = vector.reduce((sum, value) => sum + Math.max(0, value), 0);
+  if (total <= 0) return vector.map(() => 0);
+  const normalized = vector.map((value) => Math.max(0, value) / total);
+  const maxValue = Math.max(...normalized);
+  if (maxValue <= 0) return normalized;
+  return normalized.map((value) => value / maxValue);
+}
+
+function cosineSimilarity(a, b) {
+  let dot = 0;
+  let aMag = 0;
+  let bMag = 0;
+  for (let index = 0; index < a.length; index += 1) {
+    dot += a[index] * b[index];
+    aMag += a[index] * a[index];
+    bMag += b[index] * b[index];
+  }
+  if (aMag <= 0 || bMag <= 0) return 0;
+  return dot / Math.sqrt(aMag * bMag);
+}
+
+function extractFrameChroma(samples, start, kernel) {
+  const chroma = Array(12).fill(0);
+
+  kernel.bins.forEach((bin) => {
+    const power = goertzelPower(samples, start, kernel.frameLength, bin.coeff, kernel.window);
+    chroma[bin.pc] += Math.log1p(Math.max(0, power)) * bin.weight;
+  });
+
+  return chroma;
+}
+
+function extractWindowChroma(samples, startSecond, endSecond, kernel) {
+  const startSample = Math.max(0, Math.floor(startSecond * kernel.sampleRate));
+  const endSample = Math.min(samples.length, Math.floor(endSecond * kernel.sampleRate));
+  const span = Math.max(1, endSample - startSample);
+  const probeRatios = span > kernel.frameLength * 2 ? [0.25, 0.5, 0.75] : [0.5];
+  const chroma = Array(12).fill(0);
+  let rms = 0;
+
+  probeRatios.forEach((ratio) => {
+    const center = startSample + span * ratio;
+    const frameStart = Math.max(0, Math.min(samples.length - kernel.frameLength, Math.floor(center - kernel.frameLength / 2)));
+    const frameChroma = extractFrameChroma(samples, frameStart, kernel);
+    frameChroma.forEach((value, index) => {
+      chroma[index] += value / probeRatios.length;
+    });
+    rms += frameRms(samples, frameStart, kernel.frameLength, kernel.window) / probeRatios.length;
+  });
+
+  return {
+    chroma: normalizeVector(chroma),
+    rms
+  };
+}
+
+function chordTemplateVector(rootPc, template) {
+  const vector = Array(12).fill(0.04);
+  template.intervals.forEach((interval, index) => {
+    const pc = normalizePc(rootPc + interval);
+    vector[pc] = index === 0 ? 1.25 : interval === 7 ? 0.95 : 1;
+  });
+  return normalizeVector(vector);
+}
+
+function detectChord(chroma, rms, threshold) {
+  if (rms < 0.004) {
+    return {
+      label: "N.C.",
+      rootPc: 0,
+      template: null,
+      intervals: [],
+      score: 0
+    };
+  }
+
+  const scores = [];
+  for (let rootPc = 0; rootPc < 12; rootPc += 1) {
+    CHORD_TEMPLATES.forEach((template) => {
+      const templateVector = chordTemplateVector(rootPc, template);
+      const complexityPenalty = Math.max(0, template.intervals.length - 3) * 0.018;
+      const score = cosineSimilarity(chroma, templateVector) - complexityPenalty + chroma[rootPc] * 0.035;
+      scores.push({ rootPc, template, score });
+    });
+  }
+
+  scores.sort((a, b) => b.score - a.score);
+  const best = scores[0];
+  const second = scores[1];
+  if (!best || best.score < threshold || (second && best.score - second.score < 0.018)) {
+    return {
+      label: "N.C.",
+      rootPc: 0,
+      template: null,
+      intervals: [],
+      score: best ? Math.max(0, best.score) : 0
+    };
+  }
+
+  return {
+    label: chordLabel(best.rootPc, best.template),
+    rootPc: best.rootPc,
+    template: best.template.name,
+    suffix: best.template.suffix,
+    intervals: best.template.intervals,
+    score: Math.max(0, best.score)
+  };
+}
+
+function estimateMajorKey(chroma) {
+  const normalized = normalizeVector(chroma);
+  let best = null;
+
+  for (let rootPc = 0; rootPc < 12; rootPc += 1) {
+    const profile = Array(12).fill(0);
+    MAJOR_KEY_PROFILE.forEach((value, index) => {
+      profile[normalizePc(rootPc + index)] = value;
+    });
+    const score = cosineSimilarity(normalized, normalizeVector(profile));
+    if (!best || score > best.score) {
+      const keyId = SKY_KEY_BY_PC[rootPc];
+      best = {
+        pc: rootPc,
+        keyId,
+        label: KEY_CONFIGS.find((config) => config.id === keyId)?.label || `${noteNameForPc(rootPc)} major`,
+        score
+      };
+    }
+  }
+
+  return best;
+}
+
+function smoothChordFrames(frames) {
+  const smoothed = frames.map((frame) => ({ ...frame }));
+  for (let index = 1; index < smoothed.length - 1; index += 1) {
+    const previous = smoothed[index - 1];
+    const current = smoothed[index];
+    const next = smoothed[index + 1];
+    if (previous.label === next.label && current.label !== previous.label) {
+      smoothed[index] = {
+        ...current,
+        label: previous.label,
+        rootPc: previous.rootPc,
+        template: previous.template,
+        suffix: previous.suffix,
+        intervals: previous.intervals,
+        score: (previous.score + next.score) / 2
+      };
+    }
+  }
+  return smoothed;
+}
+
+function mergeFrames(frames) {
+  const merged = [];
+  frames.forEach((frame) => {
+    const last = merged[merged.length - 1];
+    if (last && last.label === frame.label) {
+      const lastDuration = last.end - last.start;
+      const frameDuration = frame.end - frame.start;
+      const totalDuration = lastDuration + frameDuration;
+      last.score = ((last.score * lastDuration) + (frame.score * frameDuration)) / Math.max(0.001, totalDuration);
+      last.end = frame.end;
+    } else {
+      merged.push({ ...frame });
+    }
+  });
+  return merged;
+}
+
+function enforceMinimumChordDuration(segments, minimumSeconds) {
+  let next = segments.map((segment) => ({ ...segment }));
+
+  for (let pass = 0; pass < 8; pass += 1) {
+    const shortIndex = next.findIndex((segment) => {
+      return segment.label !== "N.C." && segment.end - segment.start < minimumSeconds && next.length > 1;
+    });
+    if (shortIndex === -1) break;
+
+    const left = next[shortIndex - 1];
+    const current = next[shortIndex];
+    const right = next[shortIndex + 1];
+    const target = !left ? right : !right ? left : (right.end - right.start > left.end - left.start ? right : left);
+
+    current.label = target.label;
+    current.rootPc = target.rootPc;
+    current.template = target.template;
+    current.suffix = target.suffix;
+    current.intervals = target.intervals;
+    current.score = Math.min(current.score, target.score);
+    next = mergeFrames(next);
+  }
+
+  return next;
+}
+
+function buildChordFrames(samples, duration, kernel, windowSeconds, threshold, onProgress) {
+  const frames = [];
+  const globalChroma = Array(12).fill(0);
+  const windowCount = Math.max(1, Math.ceil(duration / windowSeconds));
+
+  return new Promise((resolve) => {
+    let index = 0;
+
+    function processBatch() {
+      const batchEnd = Math.min(windowCount, index + 4);
+      for (; index < batchEnd; index += 1) {
+        const start = index * windowSeconds;
+        const end = Math.min(duration, start + windowSeconds);
+        const extracted = extractWindowChroma(samples, start, end, kernel);
+        extracted.chroma.forEach((value, pc) => {
+          globalChroma[pc] += value;
+        });
+        const chord = detectChord(extracted.chroma, extracted.rms, threshold);
+        frames.push({
+          start,
+          end,
+          label: chord.label,
+          rootPc: chord.rootPc,
+          template: chord.template,
+          suffix: chord.suffix,
+          intervals: chord.intervals,
+          score: chord.score
+        });
+      }
+
+      if (onProgress) onProgress(index, windowCount);
+
+      if (index < windowCount) {
+        window.requestAnimationFrame(processBatch);
+      } else {
+        resolve({ frames, globalChroma });
+      }
+    }
+
+    processBatch();
+  });
+}
+
+async function analyzeAudioFile() {
+  const file = els.audioFileInput.files && els.audioFileInput.files[0];
+  if (!file) {
+    setAudioStatus("Choose an MP3 file");
+    return;
+  }
+
+  els.analyzeAudioBtn.disabled = true;
+  els.refineChordsBtn.disabled = true;
+  els.importChordsBtn.disabled = true;
+  setAudioStatus("Decoding audio");
+
+  try {
+    const ctx = getAudioContext();
+    const buffer = await ctx.decodeAudioData(await file.arrayBuffer());
+    const targetRate = Math.min(11025, buffer.sampleRate);
+    const mono = downmixAudioBuffer(buffer);
+    const samples = resampleLinear(mono, buffer.sampleRate, targetRate);
+    const windowSeconds = Number(els.analysisWindowSelect.value) || 1;
+    const minimumSeconds = Number(els.minChordSelect.value) || 2;
+    const threshold = Number(els.chordSensitivityInput.value) || 0.62;
+    const frameLength = Math.min(4096, Math.max(2048, Math.floor(targetRate * Math.min(0.5, windowSeconds))));
+    const kernel = buildAnalysisKernel(targetRate, frameLength);
+
+    const analysis = await buildChordFrames(samples, buffer.duration, kernel, windowSeconds, threshold, (done, total) => {
+      setAudioStatus(`Analyzing ${Math.round((done / total) * 100)}%`);
+    });
+
+    const smoothed = smoothChordFrames(analysis.frames);
+    const merged = enforceMinimumChordDuration(mergeFrames(smoothed), minimumSeconds);
+    state.chordAnalysis = {
+      fileName: file.name,
+      duration: buffer.duration,
+      keyGuess: estimateMajorKey(analysis.globalChroma),
+      segments: merged,
+      refinedText: ""
+    };
+    renderChordAnalysis();
+    setAudioStatus(`${file.name} analyzed`);
+  } catch (error) {
+    state.chordAnalysis = { fileName: "", duration: 0, keyGuess: null, segments: [], refinedText: "" };
+    renderChordAnalysis();
+    setAudioStatus("Audio decode failed");
+    console.error(error);
+  } finally {
+    els.analyzeAudioBtn.disabled = false;
+  }
+}
+
+function useDetectedKey() {
+  const guess = state.chordAnalysis.keyGuess;
+  if (!guess) return;
+  state.keyId = guess.keyId;
+  state.chordAnalysis.refinedText = "";
+  syncControls();
+  renderAll();
+  setStatus(`${guess.label} selected from audio`);
+}
+
+async function refineChordsWithMimo() {
+  const segments = state.chordAnalysis.segments;
+  if (!segments.length) {
+    setAudioStatus("Analyze audio first");
+    return;
+  }
+
+  const chordLines = segments.map((segment) => {
+    const mapping = mappingForChord(segment);
+    const label = displayChordLabel(segment);
+    const skyText = segment.label === "N.C." ? "rest" : mapping ? mapping.text : "not in selected Sky key";
+    return `${formatTime(segment.start)}-${formatTime(segment.end)} | ${label} | ${skyText} | score ${segment.score.toFixed(2)}`;
+  });
+
+  els.refineChordsBtn.disabled = true;
+  setAudioStatus("Refining with MiMo");
+
+  try {
+    const response = await fetch("/api/mimo-refine", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: els.titleInput.value,
+        selectedSkyKey: currentConfig().label,
+        detectedKey: state.chordAnalysis.keyGuess ? state.chordAnalysis.keyGuess.label : "",
+        duration: state.chordAnalysis.duration,
+        chordLines
+      })
+    });
+
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error || "MiMo request failed");
+    }
+
+    state.chordAnalysis.refinedText = payload.refinedText || "";
+    renderChordAnalysis();
+    setAudioStatus("MiMo refinement ready");
+  } catch (error) {
+    console.error(error);
+    setAudioStatus(error.message || "MiMo refinement failed");
+  } finally {
+    els.refineChordsBtn.disabled = state.chordAnalysis.segments.length === 0;
+  }
+}
+
+function importPlayableChords() {
+  const beatSeconds = 60 / Math.max(30, Number(state.bpm) || 96);
+  const events = [];
+
+  state.chordAnalysis.segments.forEach((segment) => {
+    const duration = Math.max(0.5, Math.round(((segment.end - segment.start) / beatSeconds) * 2) / 2);
+    const mapping = mappingForChord(segment);
+    if (segment.label === "N.C." || !mapping) {
+      events.push({ type: "rest", duration });
+      return;
+    }
+    events.push({ type: "note", notes: mapping.buttonIds, duration });
+  });
+
+  if (!events.length) {
+    setAudioStatus("No playable chords");
+    return;
+  }
+
+  state.events = events;
+  state.pending = [];
+  renderAll();
+  setStatus("Imported audio chords into sheet");
+}
+
 function getAudioContext() {
   if (!audioContext) {
-    audioContext = new AudioContext();
+    const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
+    audioContext = new AudioContextConstructor();
   }
   return audioContext;
 }
@@ -760,6 +1447,7 @@ function bindEvents() {
   els.keySelect.addEventListener("change", () => {
     state.keyId = els.keySelect.value;
     state.pending = [];
+    state.chordAnalysis.refinedText = "";
     renderAll();
     setStatus(`${currentConfig().label} selected`);
   });
@@ -807,6 +1495,23 @@ function bindEvents() {
   els.importNumbersBtn.addEventListener("click", () => importSheet("numbers"));
   els.exportFormat.addEventListener("change", renderExport);
   els.copyExportBtn.addEventListener("click", copyExport);
+  els.audioFileInput.addEventListener("change", () => {
+    const file = els.audioFileInput.files && els.audioFileInput.files[0];
+    setAudioStatus(file ? `${file.name} ready` : "No MP3 loaded");
+  });
+  els.analyzeAudioBtn.addEventListener("click", analyzeAudioFile);
+  els.refineChordsBtn.addEventListener("click", refineChordsWithMimo);
+  els.importChordsBtn.addEventListener("click", importPlayableChords);
+  els.useDetectedKeyBtn.addEventListener("click", useDetectedKey);
+  els.analysisWindowSelect.addEventListener("change", () => {
+    if (state.chordAnalysis.segments.length) setAudioStatus("Re-analyze for new window");
+  });
+  els.minChordSelect.addEventListener("change", () => {
+    if (state.chordAnalysis.segments.length) setAudioStatus("Re-analyze for new minimum");
+  });
+  els.chordSensitivityInput.addEventListener("input", () => {
+    if (state.chordAnalysis.segments.length) setAudioStatus("Re-analyze for new sensitivity");
+  });
   els.titleInput.addEventListener("input", renderExport);
   els.authorInput.addEventListener("input", renderExport);
 

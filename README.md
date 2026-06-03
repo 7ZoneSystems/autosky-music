@@ -1,8 +1,24 @@
 # Sky Piano Sheet Maker
 
-A standalone browser tool for composing Sky: Children of the Light piano sheets on the 15-button in-game instrument grid.
+A Vercel-ready browser tool for composing Sky: Children of the Light piano sheets on the 15-button in-game instrument grid.
 
-Open `index.html` in a browser. No install or dev server is required.
+## Run Locally
+
+1. Copy `.env.example` to `.env`.
+2. Set `MIMO_API_KEY` in `.env`.
+3. Run `npm install`.
+4. Run `npm run dev`.
+5. Open the local Vercel URL.
+
+Static composing and local MP3 analysis work without MiMo. The "Refine with MiMo" button requires the serverless API route and `MIMO_API_KEY`.
+
+## Vercel Environment Variables
+
+Set these in Vercel Project Settings -> Environment Variables:
+
+- `MIMO_API_KEY`: required. Your Xiaomi MiMo API key.
+- `MIMO_BASE_URL`: optional. Defaults to `https://token-plan-sgp.xiaomimimo.com/v1`.
+- `MIMO_MODEL`: optional. Defaults to `mimo-v2.5`.
 
 ## What It Uses
 
@@ -12,6 +28,12 @@ Open `index.html` in a browser. No install or dev server is required.
 - This app stores the 12 Sky major-key layouts: C, C#/Db, D, D#/Eb, E, F, F#/Gb, G, G#/Ab, A, A#/Bb, and B.
 - `Cb` is treated as the practical enharmonic alias of B major, while the F#/Gb layout includes the `Cb` scale degree used in Sky's flat-key table.
 - The app exports common Sky sheet notation: `A1` through `C5`, 1-15 button numbers, note names, and JSON.
+- MP3 import uses the browser's Web Audio API to decode the full file, extracts 12-bin chroma from short windows, matches chord templates, smooths one-off changes, and merges short segments into a minimal chord progression.
+- Detected chords can be imported into the Sky sheet when all chord tones exist in the currently selected Sky key. Unplayable chromatic chords become rests on import.
+
+## MiMo API Note
+
+The audio engine runs locally. Xiaomi MiMo is called only by `/api/mimo-refine`, which reads `MIMO_API_KEY` from server-side environment variables. The key is never shipped to the browser. The current default base URL is `https://token-plan-sgp.xiaomimimo.com/v1`; the serverless route appends `/messages` for the Anthropic-compatible Messages API.
 
 ## Sources Checked
 
@@ -20,3 +42,7 @@ Open `index.html` in a browser. No install or dev server is required.
 - Sky Wiki, Music Key: https://sky-children-of-the-light.fandom.com/wiki/Music_Key
 - Sky Music, make-your-own sheet notation: https://sky-music.github.io/make-your-own-sheet.html
 - Sky Studio app format notes: https://play.google.com/store/apps/details?id=com.Maple.SkyStudio
+- MDN, BaseAudioContext.decodeAudioData: https://developer.mozilla.org/en-US/docs/Web/API/BaseAudioContext/decodeAudioData
+- Grosche/Jiang/Mueller/Serra, chroma/template chord recognition overview: https://petergrosche.github.io/publication/jiang-2011-analyzing/
+- Springer, reassigned spectrum-based automatic chord recognition: https://link.springer.com/article/10.1186/1687-4722-2013-15
+- Xiaomi MiMo Anthropic compatibility docs: https://platform.xiaomimimo.com/docs/api/chat/anthropic-api

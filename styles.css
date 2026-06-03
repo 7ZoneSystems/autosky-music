@@ -217,7 +217,8 @@ label span,
 .primary-button,
 .ghost-button,
 .danger-button,
-.mode-button {
+.mode-button,
+.mini-button {
   min-height: 38px;
   padding: 0 14px;
   border-radius: var(--radius);
@@ -231,7 +232,8 @@ label span,
 }
 
 .ghost-button,
-.mode-button {
+.mode-button,
+.mini-button {
   color: var(--ink);
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.74);
@@ -251,13 +253,22 @@ label span,
 .primary-button:hover,
 .ghost-button:hover,
 .danger-button:hover,
-.mode-button:hover {
+.mode-button:hover,
+.mini-button:hover {
   transform: translateY(-1px);
+}
+
+.mini-button {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 0.8rem;
 }
 
 .control-grid,
 .song-fields,
-.export-grid {
+.export-grid,
+.audio-grid,
+.chord-output-grid {
   display: grid;
   gap: 12px;
 }
@@ -269,6 +280,15 @@ label span,
 
 .song-fields {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.audio-panel {
+  grid-column: 1 / 4;
+}
+
+.audio-grid {
+  grid-template-columns: minmax(260px, 1.2fr) repeat(3, minmax(150px, 0.5fr));
+  align-items: end;
 }
 
 input,
@@ -285,6 +305,14 @@ input,
 select {
   min-height: 42px;
   padding: 0 12px;
+}
+
+input[type="file"] {
+  padding: 9px 12px;
+}
+
+input[type="range"] {
+  accent-color: var(--teal);
 }
 
 textarea {
@@ -531,6 +559,79 @@ textarea {
   align-items: end;
 }
 
+.audio-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.audio-stats > div {
+  min-height: 82px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #ffffff;
+}
+
+.audio-stats strong {
+  display: block;
+  min-height: 24px;
+  color: var(--ink);
+  font-size: 1rem;
+  line-height: 1.25;
+}
+
+.audio-stats .mini-button {
+  margin-top: 8px;
+}
+
+.chord-output-grid {
+  grid-template-columns: minmax(280px, 0.95fr) minmax(360px, 1.05fr);
+}
+
+.chord-result-list {
+  display: grid;
+  gap: 8px;
+  max-height: 250px;
+  overflow: auto;
+  padding: 10px;
+  border: 1px dashed #c4cede;
+  border-radius: var(--radius);
+  background: rgba(245, 247, 251, 0.78);
+}
+
+.chord-row {
+  display: grid;
+  grid-template-columns: 92px minmax(70px, 0.5fr) minmax(120px, 1fr) 58px;
+  gap: 8px;
+  align-items: center;
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #ffffff;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.chord-row .time {
+  color: var(--muted);
+}
+
+.chord-row .name {
+  color: var(--ink);
+}
+
+.chord-row .sky {
+  color: #344054;
+}
+
+.chord-row .score {
+  color: var(--teal);
+  text-align: right;
+}
+
 .import-actions {
   flex-direction: column;
   align-items: stretch;
@@ -553,7 +654,17 @@ textarea {
     grid-column: 1 / 3;
   }
 
+  .audio-panel {
+    grid-column: 1 / 3;
+  }
+
   .export-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .audio-grid,
+  .audio-stats,
+  .chord-output-grid {
     grid-template-columns: 1fr 1fr;
   }
 
@@ -565,8 +676,9 @@ textarea {
 
 @media (max-width: 780px) {
   .app-frame {
-    width: min(100% - 20px, 720px);
-    padding-top: 10px;
+    width: 100%;
+    max-width: 720px;
+    padding: 10px 10px 34px;
   }
 
   .topbar,
@@ -578,6 +690,7 @@ textarea {
 
   .workspace,
   .data-panel,
+  .audio-panel,
   .export-panel {
     display: block;
   }
@@ -588,26 +701,48 @@ textarea {
 
   .control-grid,
   .song-fields,
-  .export-grid {
+  .export-grid,
+  .audio-grid,
+  .audio-stats,
+  .chord-output-grid {
     grid-template-columns: 1fr;
   }
 
   .sky-grid {
-    grid-template-columns: repeat(5, minmax(48px, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 7px;
   }
 
   .sky-key {
-    min-height: 64px;
-    padding: 5px;
+    min-height: 58px;
+    padding: 4px;
+  }
+
+  .sky-key .main-label {
+    font-size: 0.98rem;
+  }
+
+  .sky-key .sub-label {
+    right: 6px;
+    bottom: 5px;
+    font-size: 0.68rem;
   }
 
   .sky-key::before {
-    inset: 8px;
+    width: min(66%, 46px);
   }
 
   .event-tile {
     width: calc(25% - 8px);
     min-width: 68px;
+  }
+
+  .chord-row {
+    grid-template-columns: 78px 70px 1fr;
+  }
+
+  .chord-row .score {
+    display: none;
   }
 }
 
