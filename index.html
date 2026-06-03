@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Sky Piano Sheet Maker</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="app-frame">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          <div>
+            <h1>Sky Piano Sheet Maker</h1>
+            <p>15-button COTL instrument grid</p>
+          </div>
+        </div>
+        <div class="top-actions">
+          <button id="saveBtn" class="ghost-button" type="button">Save</button>
+          <button id="loadBtn" class="ghost-button" type="button">Load</button>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <section class="panel piano-panel" aria-labelledby="pianoTitle">
+          <div class="panel-heading">
+            <div>
+              <h2 id="pianoTitle">Virtual Sky Piano</h2>
+              <p id="statusText">Ready</p>
+            </div>
+            <div class="mode-switch" role="group" aria-label="Entry mode">
+              <button id="singleModeBtn" class="mode-button active" type="button">Single</button>
+              <button id="chordModeBtn" class="mode-button" type="button">Chord</button>
+            </div>
+          </div>
+
+          <div class="control-grid">
+            <label>
+              <span>Music key</span>
+              <select id="keySelect"></select>
+            </label>
+            <label>
+              <span>Button label</span>
+              <select id="notationSelect">
+                <option value="abc">ABC1-5</option>
+                <option value="number">1-15</option>
+                <option value="note">Sky note</option>
+                <option value="keyboard">PC key</option>
+              </select>
+            </label>
+            <label>
+              <span>Step</span>
+              <select id="durationSelect">
+                <option value="0.5">1/2 beat</option>
+                <option value="1" selected>1 beat</option>
+                <option value="1.5">1 1/2 beats</option>
+                <option value="2">2 beats</option>
+                <option value="4">4 beats</option>
+              </select>
+            </label>
+            <label>
+              <span>BPM</span>
+              <input id="bpmInput" type="number" min="30" max="240" value="96">
+            </label>
+          </div>
+
+          <div id="pianoGrid" class="sky-grid" aria-label="Sky piano buttons"></div>
+
+          <div class="chord-tray">
+            <div>
+              <span class="eyebrow">Chord buffer</span>
+              <div id="pendingChord" class="pending-list">Empty</div>
+            </div>
+            <button id="addChordBtn" class="primary-button" type="button" disabled>Add chord</button>
+          </div>
+        </section>
+
+        <section class="panel sheet-panel" aria-labelledby="sheetTitle">
+          <div class="panel-heading">
+            <div>
+              <h2 id="sheetTitle">Sheet</h2>
+              <p id="sheetMeta">0 boxes</p>
+            </div>
+            <div class="transport">
+              <button id="playBtn" class="primary-button" type="button">Play</button>
+              <button id="stopBtn" class="ghost-button" type="button">Stop</button>
+            </div>
+          </div>
+
+          <div class="song-fields">
+            <label>
+              <span>Title</span>
+              <input id="titleInput" type="text" value="Untitled Sky Sheet">
+            </label>
+            <label>
+              <span>Transcriber</span>
+              <input id="authorInput" type="text" placeholder="Optional">
+            </label>
+          </div>
+
+          <div class="edit-actions">
+            <button id="restBtn" class="ghost-button" type="button">Rest</button>
+            <button id="barBtn" class="ghost-button" type="button">Bar</button>
+            <button id="lineBtn" class="ghost-button" type="button">New line</button>
+            <button id="undoBtn" class="ghost-button" type="button">Undo</button>
+            <button id="clearBtn" class="danger-button" type="button">Clear</button>
+          </div>
+
+          <div id="sheetTimeline" class="timeline" aria-live="polite"></div>
+        </section>
+
+        <aside class="panel data-panel" aria-labelledby="dataTitle">
+          <div class="panel-heading">
+            <div>
+              <h2 id="dataTitle">Key Data</h2>
+              <p id="keyAliasText">C major</p>
+            </div>
+          </div>
+
+          <div id="keyMatrix" class="key-matrix"></div>
+          <div class="facts">
+            <div>
+              <span class="eyebrow">Sky setup</span>
+              <p id="setupText"></p>
+            </div>
+            <div>
+              <span class="eyebrow">Convenient places</span>
+              <ul id="placesList"></ul>
+            </div>
+            <div>
+              <span class="eyebrow">Aliases</span>
+              <p id="aliasesText"></p>
+            </div>
+          </div>
+        </aside>
+
+        <section class="panel export-panel" aria-labelledby="exportTitle">
+          <div class="panel-heading">
+            <div>
+              <h2 id="exportTitle">Import / Export</h2>
+              <p>ABC1-5, numbers, note names, JSON</p>
+            </div>
+            <button id="copyExportBtn" class="ghost-button" type="button">Copy export</button>
+          </div>
+
+          <div class="export-grid">
+            <label>
+              <span>Paste sheet text</span>
+              <textarea id="importText" spellcheck="false" placeholder="A1A3B3 . B4 B5"></textarea>
+            </label>
+            <div class="import-actions">
+              <button id="importAbcBtn" class="primary-button" type="button">Import ABC1-5</button>
+              <button id="importNumbersBtn" class="ghost-button" type="button">Import numbers</button>
+            </div>
+            <label>
+              <span>Export format</span>
+              <select id="exportFormat">
+                <option value="abc">ABC1-5</option>
+                <option value="numbers">Numbers</option>
+                <option value="notes">Sky notes</option>
+                <option value="json">JSON</option>
+              </select>
+            </label>
+            <label>
+              <span>Generated output</span>
+              <textarea id="exportText" spellcheck="false" readonly></textarea>
+            </label>
+          </div>
+
+          <div class="source-row">
+            <a href="https://thatgamecompany.helpshift.com/hc/en/17-sky-children-of-the-light/faq/1345-how-do-i-use-music-sheets-in-sky/?l=en" target="_blank" rel="noreferrer">Official 15-note source</a>
+            <a href="https://sky-children-of-the-light.fandom.com/wiki/Instruments" target="_blank" rel="noreferrer">Instrument layout source</a>
+            <a href="https://sky-children-of-the-light.fandom.com/wiki/Music_Key" target="_blank" rel="noreferrer">Music key source</a>
+            <a href="https://sky-music.github.io/make-your-own-sheet.html" target="_blank" rel="noreferrer">ABC1-5 notation source</a>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

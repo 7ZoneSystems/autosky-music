@@ -1,0 +1,66 @@
+# Dependencies
+node_modules/
+bower_components/
+vendor/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Build / output
+dist/
+build/
+out/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
+
+# IDE / editor
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+.project
+.classpath
+.settings/
+*.code-workspace
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Coverage / test
+coverage/
+.nyc_output/
+*.lcov
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Compiled
+*.o
+*.a
+*.so
+*.dll
+*.exe
+
+# Misc
+*.tmp
+*.bak
+*.orig
+.cache/
+.parcel-cache/
