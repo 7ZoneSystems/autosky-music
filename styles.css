@@ -22,6 +22,12 @@
   box-sizing: border-box;
 }
 
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 body {
   min-height: 100vh;
   margin: 0;
@@ -37,6 +43,13 @@ input,
 select,
 textarea {
   font: inherit;
+}
+
+label,
+input,
+select,
+textarea {
+  min-width: 0;
 }
 
 button {
@@ -268,7 +281,12 @@ label span,
 .song-fields,
 .export-grid,
 .audio-grid,
-.chord-output-grid {
+.chord-output-grid,
+.melody-output-grid,
+.rhythm-output-grid,
+.track-output-grid,
+.combined-output-grid,
+.wording-output-grid {
   display: grid;
   gap: 12px;
 }
@@ -287,8 +305,12 @@ label span,
 }
 
 .audio-grid {
-  grid-template-columns: minmax(260px, 1.2fr) repeat(3, minmax(150px, 0.5fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   align-items: end;
+}
+
+.audio-grid label:first-child {
+  grid-column: span 2;
 }
 
 input,
@@ -561,7 +583,7 @@ textarea {
 
 .audio-stats {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(142px, 1fr));
   gap: 10px;
   margin: 16px 0;
 }
@@ -586,11 +608,28 @@ textarea {
   margin-top: 8px;
 }
 
-.chord-output-grid {
+.chord-output-grid,
+.melody-output-grid,
+.rhythm-output-grid,
+.track-output-grid,
+.combined-output-grid,
+.wording-output-grid {
   grid-template-columns: minmax(280px, 0.95fr) minmax(360px, 1.05fr);
 }
 
-.chord-result-list {
+.melody-output-grid,
+.rhythm-output-grid,
+.track-output-grid,
+.combined-output-grid,
+.wording-output-grid {
+  margin-top: 14px;
+}
+
+.chord-result-list,
+.melody-result-list,
+.rhythm-result-list,
+.combined-result-list,
+.wording-result-list {
   display: grid;
   gap: 8px;
   max-height: 250px;
@@ -615,21 +654,100 @@ textarea {
   font-weight: 800;
 }
 
-.chord-row .time {
+.melody-row {
+  display: grid;
+  grid-template-columns: 92px 70px minmax(120px, 1fr) 58px;
+  gap: 8px;
+  align-items: center;
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #ffffff;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.rhythm-row {
+  display: grid;
+  grid-template-columns: 92px minmax(90px, 0.7fr) minmax(90px, 1fr) 58px;
+  gap: 8px;
+  align-items: center;
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #ffffff;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.combined-row {
+  display: grid;
+  grid-template-columns: 92px minmax(90px, 0.7fr) minmax(120px, 1fr) 58px;
+  gap: 8px;
+  align-items: center;
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #ffffff;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.wording-row {
+  display: grid;
+  grid-template-columns: minmax(90px, 0.9fr) 90px minmax(120px, 1fr) 58px;
+  gap: 8px;
+  align-items: center;
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #ffffff;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.chord-row .time,
+.melody-row .time,
+.rhythm-row .time,
+.combined-row .time,
+.wording-row .word {
   color: var(--muted);
 }
 
-.chord-row .name {
+.chord-row .name,
+.melody-row .name,
+.rhythm-row .name,
+.combined-row .name,
+.wording-row .name {
   color: var(--ink);
 }
 
-.chord-row .sky {
+.chord-row .sky,
+.melody-row .sky,
+.rhythm-row .sky,
+.combined-row .sky,
+.wording-row .sky {
   color: #344054;
 }
 
-.chord-row .score {
+.chord-row .score,
+.melody-row .score,
+.rhythm-row .score,
+.combined-row .score,
+.wording-row .score {
   color: var(--teal);
   text-align: right;
+}
+
+.wording-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
 }
 
 .import-actions {
@@ -664,7 +782,12 @@ textarea {
 
   .audio-grid,
   .audio-stats,
-  .chord-output-grid {
+  .chord-output-grid,
+  .melody-output-grid,
+  .rhythm-output-grid,
+  .track-output-grid,
+  .combined-output-grid,
+  .wording-output-grid {
     grid-template-columns: 1fr 1fr;
   }
 
@@ -704,8 +827,17 @@ textarea {
   .export-grid,
   .audio-grid,
   .audio-stats,
-  .chord-output-grid {
+  .chord-output-grid,
+  .melody-output-grid,
+  .rhythm-output-grid,
+  .track-output-grid,
+  .combined-output-grid,
+  .wording-output-grid {
     grid-template-columns: 1fr;
+  }
+
+  .audio-grid label:first-child {
+    grid-column: span 1;
   }
 
   .sky-grid {
@@ -737,11 +869,33 @@ textarea {
     min-width: 68px;
   }
 
+  .edit-actions .ghost-button,
+  .edit-actions .danger-button {
+    flex: 1 1 calc(50% - 8px);
+  }
+
   .chord-row {
     grid-template-columns: 78px 70px 1fr;
   }
 
-  .chord-row .score {
+  .melody-row {
+    grid-template-columns: 78px 62px 1fr;
+  }
+
+  .rhythm-row,
+  .combined-row {
+    grid-template-columns: 78px minmax(70px, 0.7fr) 1fr;
+  }
+
+  .wording-row {
+    grid-template-columns: minmax(70px, 1fr) 64px minmax(86px, 1fr);
+  }
+
+  .chord-row .score,
+  .melody-row .score,
+  .rhythm-row .score,
+  .combined-row .score,
+  .wording-row .score {
     display: none;
   }
 }

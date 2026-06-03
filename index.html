@@ -142,12 +142,15 @@
         <section class="panel audio-panel" aria-labelledby="audioTitle">
           <div class="panel-heading">
             <div>
-              <h2 id="audioTitle">Audio To Chords</h2>
+              <h2 id="audioTitle">Audio To Sheet</h2>
               <p id="audioStatus">No MP3 loaded</p>
             </div>
             <div class="transport">
               <button id="analyzeAudioBtn" class="primary-button" type="button">Analyze MP3</button>
+              <button id="autoTuneBtn" class="ghost-button" type="button" disabled>Auto tune</button>
               <button id="refineChordsBtn" class="ghost-button" type="button" disabled>Refine with MiMo</button>
+              <button id="importCombinedBtn" class="ghost-button" type="button" disabled>Import combined</button>
+              <button id="importMelodyBtn" class="ghost-button" type="button" disabled>Import melody</button>
               <button id="importChordsBtn" class="ghost-button" type="button" disabled>Import playable</button>
             </div>
           </div>
@@ -176,8 +179,36 @@
               </select>
             </label>
             <label>
-              <span>Sensitivity</span>
+              <span>Chord sensitivity</span>
               <input id="chordSensitivityInput" type="range" min="0.52" max="0.86" step="0.02" value="0.62">
+            </label>
+            <label>
+              <span>Melody sensitivity</span>
+              <input id="melodySensitivityInput" type="range" min="0.08" max="0.28" step="0.01" value="0.15">
+            </label>
+            <label>
+              <span>Engine</span>
+              <select id="analysisProfileSelect">
+                <option value="balanced">Balanced</option>
+                <option value="long" selected>Long song</option>
+                <option value="beast">Beast</option>
+              </select>
+            </label>
+            <label>
+              <span>Feel density</span>
+              <select id="feelDensitySelect">
+                <option value="sparse">Sparse</option>
+                <option value="balanced" selected>Balanced</option>
+                <option value="full">Full</option>
+              </select>
+            </label>
+            <label>
+              <span>Timing enhancer</span>
+              <select id="enhancerSelect">
+                <option value="threePhase" selected>Three phase</option>
+                <option value="gentle">Gentle</option>
+                <option value="off">Off</option>
+              </select>
             </label>
           </div>
 
@@ -188,8 +219,25 @@
               <button id="useDetectedKeyBtn" class="mini-button" type="button" disabled>Use key</button>
             </div>
             <div>
+              <span class="eyebrow">Estimated BPM</span>
+              <strong id="estimatedBpmText">-</strong>
+              <button id="useEstimatedBpmBtn" class="mini-button" type="button" disabled>Use BPM</button>
+            </div>
+            <div>
               <span class="eyebrow">Chords</span>
               <strong id="chordCountText">0</strong>
+            </div>
+            <div>
+              <span class="eyebrow">Melody notes</span>
+              <strong id="melodyCountText">0</strong>
+            </div>
+            <div>
+              <span class="eyebrow">Rhythm hits</span>
+              <strong id="rhythmCountText">0</strong>
+            </div>
+            <div>
+              <span class="eyebrow">Combined boxes</span>
+              <strong id="combinedCountText">0</strong>
             </div>
             <div>
               <span class="eyebrow">Playable in Sky key</span>
@@ -209,6 +257,65 @@
             <div>
               <span class="eyebrow">Chord map</span>
               <div id="chordResultList" class="chord-result-list"></div>
+            </div>
+          </div>
+
+          <div class="melody-output-grid">
+            <label>
+              <span>Melody Sky format</span>
+              <textarea id="melodyOutputText" spellcheck="false" readonly></textarea>
+            </label>
+            <div>
+              <span class="eyebrow">Melody map</span>
+              <div id="melodyResultList" class="melody-result-list"></div>
+            </div>
+          </div>
+
+          <div class="rhythm-output-grid">
+            <label>
+              <span>Rhythm format</span>
+              <textarea id="rhythmOutputText" spellcheck="false" readonly></textarea>
+            </label>
+            <div>
+              <span class="eyebrow">Rhythm map</span>
+              <div id="rhythmResultList" class="rhythm-result-list"></div>
+            </div>
+          </div>
+
+          <div class="track-output-grid">
+            <label>
+              <span>Foreground / theme track</span>
+              <textarea id="foregroundOutputText" spellcheck="false" readonly></textarea>
+            </label>
+            <label>
+              <span>Background pulse track</span>
+              <textarea id="backgroundOutputText" spellcheck="false" readonly></textarea>
+            </label>
+          </div>
+
+          <div class="combined-output-grid">
+            <label>
+              <span>Combined feel format</span>
+              <textarea id="combinedOutputText" spellcheck="false" readonly></textarea>
+            </label>
+            <div>
+              <span class="eyebrow">Combined map</span>
+              <div id="combinedResultList" class="combined-result-list"></div>
+            </div>
+          </div>
+
+          <div class="wording-output-grid">
+            <label>
+              <span>Wordings / lyrics</span>
+              <textarea id="wordingInputText" spellcheck="true" placeholder="twinkle twinkle little star"></textarea>
+            </label>
+            <div>
+              <span class="eyebrow">Word note alignment</span>
+              <div id="wordingResultList" class="wording-result-list"></div>
+              <div class="wording-actions">
+                <button id="alignWordingBtn" class="primary-button" type="button">Align words</button>
+                <button id="importWordingBtn" class="ghost-button" type="button" disabled>Import wording</button>
+              </div>
             </div>
           </div>
         </section>
