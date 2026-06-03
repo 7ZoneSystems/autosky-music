@@ -45,7 +45,7 @@ Set these in Vercel Project Settings -> Environment Variables:
 - "Import combined" uses the melody/rhythm/chord merger. It is intentionally optimized for similar sound and feel on Sky's small grid, not literal transcription accuracy.
 - Complex piano covers no longer depend only on the dominant-pitch tracker. If voice-style melody tracking is sparse, the app falls back to salience-based foreground piano contours and background accompaniment pulses.
 - Foreground/theme and background pulse tracks are shown separately before the final combined sheet, so dense piano covers can be inspected without losing the arrangement context.
-- Playback uses generated Sky-like bright piano samples with a shared room/reverb bus and chord gain scaling. It does not bundle extracted official game samples.
+- Playback is locked to a dry generated Sky-piano-style preset: fixed-duration piano notes, exact pitch, no vibrato, no random reverb/delay, no bell/harp/hold-synth preset, and chord gain scaling. It does not bundle extracted official game samples.
 - Engine profile controls:
   - `Balanced`: faster analysis for short/medium songs.
   - `Long song`: default profile for 4-5 minute MP3s.

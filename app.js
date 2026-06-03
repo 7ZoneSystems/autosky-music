@@ -3464,20 +3464,6 @@ function getAudioContext() {
   return audioContext;
 }
 
-function createRoomImpulse(ctx, seconds = 1.35, decay = 3.2) {
-  const length = Math.max(1, Math.floor(ctx.sampleRate * seconds));
-  const buffer = ctx.createBuffer(2, length, ctx.sampleRate);
-  for (let channel = 0; channel < 2; channel += 1) {
-    const data = buffer.getChannelData(channel);
-    for (let index = 0; index < length; index += 1) {
-      const time = index / length;
-      const early = index < ctx.sampleRate * 0.035 ? 0.58 : 1;
-      data[index] = (Math.random() * 2 - 1) * Math.pow(1 - time, decay) * early;
-    }
-  }
-  return buffer;
-}
-
 function getAudioGraph() {
   const ctx = getAudioContext();
   if (audioGraph && audioGraph.context === ctx) return audioGraph;
@@ -3485,37 +3471,22 @@ function getAudioGraph() {
   const input = ctx.createGain();
   const body = ctx.createBiquadFilter();
   const compressor = ctx.createDynamicsCompressor();
-  const dry = ctx.createGain();
-  const wet = ctx.createGain();
-  const convolver = ctx.createConvolver();
-  const delay = ctx.createDelay(0.8);
-  const delayGain = ctx.createGain();
-  const feedback = ctx.createGain();
+  const output = ctx.createGain();
 
   body.type = "lowpass";
-  body.frequency.setValueAtTime(6200, ctx.currentTime);
+  body.frequency.setValueAtTime(5200, ctx.currentTime);
   body.Q.setValueAtTime(0.42, ctx.currentTime);
 
-  compressor.threshold.setValueAtTime(-18, ctx.currentTime);
-  compressor.knee.setValueAtTime(18, ctx.currentTime);
-  compressor.ratio.setValueAtTime(2.4, ctx.currentTime);
-  compressor.attack.setValueAtTime(0.012, ctx.currentTime);
-  compressor.release.setValueAtTime(0.22, ctx.currentTime);
-
-  dry.gain.setValueAtTime(0.82, ctx.currentTime);
-  wet.gain.setValueAtTime(0.18, ctx.currentTime);
-  delay.delayTime.setValueAtTime(0.19, ctx.currentTime);
-  delayGain.gain.setValueAtTime(0.055, ctx.currentTime);
-  feedback.gain.setValueAtTime(0.18, ctx.currentTime);
-  convolver.buffer = createRoomImpulse(ctx);
+  compressor.threshold.setValueAtTime(-15, ctx.currentTime);
+  compressor.knee.setValueAtTime(10, ctx.currentTime);
+  compressor.ratio.setValueAtTime(1.8, ctx.currentTime);
+  compressor.attack.setValueAtTime(0.006, ctx.currentTime);
+  compressor.release.setValueAtTime(0.16, ctx.currentTime);
+  output.gain.setValueAtTime(0.86, ctx.currentTime);
 
   input.connect(body);
   body.connect(compressor);
-  compressor.connect(dry).connect(ctx.destination);
-  compressor.connect(convolver).connect(wet).connect(ctx.destination);
-  compressor.connect(delay);
-  delay.connect(delayGain).connect(ctx.destination);
-  delay.connect(feedback).connect(delay);
+  compressor.connect(output).connect(ctx.destination);
 
   audioGraph = {
     context: ctx,
@@ -3541,42 +3512,35 @@ function skySampleCacheKey(ctx, frequency) {
 }
 
 function createSkyPianoSample(ctx, frequency) {
-  const seconds = frequency > 1200 ? 1.35 : frequency > 700 ? 1.65 : 1.95;
+  const seconds = frequency > 1200 ? 1.15 : frequency > 700 ? 1.42 : 1.68;
   const length = Math.max(1, Math.floor(ctx.sampleRate * seconds));
   const buffer = ctx.createBuffer(2, length, ctx.sampleRate);
-  const attackSeconds = 0.007;
-  const bodyDecay = frequency > 900 ? 3.7 : 2.85;
-  const phaseSeed = frequency * 0.0017;
+  const attackSeconds = 0.0045;
+  const bodyDecay = frequency > 900 ? 4.35 : 3.35;
   let peak = 0.0001;
+  const mono = new Float32Array(length);
 
-  for (let channel = 0; channel < 2; channel += 1) {
-    const data = buffer.getChannelData(channel);
-    const stereoPhase = channel ? 0.018 : -0.014;
-    for (let index = 0; index < length; index += 1) {
-      const time = index / ctx.sampleRate;
-      const attack = Math.min(1, time / attackSeconds);
-      const fadeOut = Math.min(1, (seconds - time) / 0.08);
-      const envelope = attack * Math.max(0, fadeOut);
-      const body = Math.exp(-time * bodyDecay);
-      const bell = Math.exp(-time * 5.4);
-      const strike = Math.exp(-time * 18);
-      const motion = 1 + Math.sin(time * 5.1 + phaseSeed) * 0.012;
-      const fundamental = Math.sin(TWO_PI * frequency * time * motion + stereoPhase) * 0.54 * body;
-      const octave = Math.sin(TWO_PI * frequency * 2.006 * time + 0.42 + stereoPhase) * 0.28 * bell;
-      const twelfth = Math.sin(TWO_PI * frequency * 3.012 * time + 1.1) * 0.13 * Math.exp(-time * 7.2);
-      const glass = Math.sin(TWO_PI * frequency * 4.18 * time + 0.2) * 0.075 * strike;
-      const upper = Math.sin(TWO_PI * frequency * 5.01 * time + 1.8) * 0.045 * Math.exp(-time * 11.5);
-      const value = (fundamental + octave + twelfth + glass + upper) * envelope;
-      data[index] = value;
-      peak = Math.max(peak, Math.abs(value));
-    }
+  for (let index = 0; index < length; index += 1) {
+    const time = index / ctx.sampleRate;
+    const attack = Math.min(1, time / attackSeconds);
+    const fadeOut = Math.min(1, (seconds - time) / 0.08);
+    const envelope = attack * Math.max(0, fadeOut);
+    const body = Math.exp(-time * bodyDecay);
+    const hammer = Math.exp(-time * 30);
+    const fundamental = Math.sin(TWO_PI * frequency * time) * 0.82 * body;
+    const octave = Math.sin(TWO_PI * frequency * 2 * time + 0.2) * 0.105 * Math.exp(-time * 6.2);
+    const third = Math.sin(TWO_PI * frequency * 3 * time + 0.55) * 0.026 * Math.exp(-time * 9.5);
+    const hammerTone = Math.sin(TWO_PI * frequency * 4 * time + 0.9) * 0.012 * hammer;
+    const value = (fundamental + octave + third + hammerTone) * envelope;
+    mono[index] = value;
+    peak = Math.max(peak, Math.abs(value));
   }
 
-  const normalize = 0.72 / peak;
+  const normalize = 0.68 / peak;
   for (let channel = 0; channel < 2; channel += 1) {
     const data = buffer.getChannelData(channel);
     for (let index = 0; index < length; index += 1) {
-      data[index] *= normalize;
+      data[index] = mono[index] * normalize;
     }
   }
 
@@ -3598,22 +3562,19 @@ function playTone(frequency, startTime, duration, options = {}) {
   const tone = ctx.createBiquadFilter();
   const output = getAudioGraph().input;
   const sample = getSkyPianoSample(ctx, frequency);
-  const safeDuration = Math.max(0.08, duration);
-  const release = Math.min(0.42, Math.max(0.16, options.release || safeDuration * 0.28));
   const level = Math.max(0.18, Math.min(1, options.level || 1));
-  const playLength = Math.min(sample.duration, Math.max(0.42, safeDuration + release));
 
   source.buffer = sample;
   tone.type = "lowpass";
-  tone.frequency.setValueAtTime(frequency > 900 ? 7600 : 6800, startTime);
-  tone.Q.setValueAtTime(0.3, startTime);
+  tone.frequency.setValueAtTime(frequency > 900 ? 4300 : 3900, startTime);
+  tone.Q.setValueAtTime(0.18, startTime);
 
   gain.gain.setValueAtTime(0.0001, startTime);
-  gain.gain.exponentialRampToValueAtTime(0.82 * level, startTime + 0.008);
-  gain.gain.setTargetAtTime(0.0001, startTime + safeDuration, release * 0.42);
+  gain.gain.exponentialRampToValueAtTime(0.86 * level, startTime + 0.006);
+  gain.gain.setValueAtTime(0.86 * level, startTime + 0.02);
   source.connect(tone).connect(gain).connect(output);
   source.start(startTime);
-  source.stop(startTime + playLength + 0.02);
+  source.stop(startTime + sample.duration + 0.02);
   activeOscillators.push(source);
 }
 
@@ -3660,13 +3621,10 @@ function playSheet() {
       const eventSeconds = beatSeconds * event.duration;
       const gate = playbackGateForEvent(event, eventSeconds);
       const toneSeconds = Math.max(0.045, eventSeconds * gate);
-      const release = Math.min(0.12, Math.max(0.024, eventSeconds * (1 - gate) + 0.018));
       const noteCount = Math.max(1, event.notes.length);
       const chordLevel = Math.min(0.92, 1 / Math.pow(noteCount, 0.45));
-      event.notes.forEach((id, noteIndex) => {
-        const spread = noteCount > 1 ? noteIndex * 0.0045 : 0;
-        playTone(frequencyForButton(id), cursor + spread, toneSeconds, {
-          release,
+      event.notes.forEach((id) => {
+        playTone(frequencyForButton(id), cursor, toneSeconds, {
           level: chordLevel
         });
         scheduledTimers.push(window.setTimeout(() => flashPianoKey(id, Math.min(190, Math.max(90, eventSeconds * 240))), visualDelay));
