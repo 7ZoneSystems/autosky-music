@@ -8,6 +8,6 @@
     "start": "vercel dev"
   },
   "devDependencies": {
-    "vercel": "^39.0.0"
+    "vercel": "latest"
   }
 }
