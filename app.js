@@ -354,6 +354,12 @@ const state = {
     confidence: null,
     omrModel: "",
     durationBeats: 0
+  },
+  scorePanelOpen: false,
+  mobileCreator: {
+    open: false,
+    chordMode: false,
+    pending: []
   }
 };
 
@@ -515,6 +521,9 @@ const els = {
   importWordingBtn: document.querySelector("#importWordingBtn"),
   wordingResultList: document.querySelector("#wordingResultList"),
   scoreFileInput: document.querySelector("#scoreFileInput"),
+  scorePanel: document.querySelector(".score-panel"),
+  scorePanelBody: document.querySelector("#scorePanelBody"),
+  scoreToggleBtn: document.querySelector("#scoreToggleBtn"),
   analyzeScoreBtn: document.querySelector("#analyzeScoreBtn"),
   importScoreBtn: document.querySelector("#importScoreBtn"),
   scoreKeyStrategySelect: document.querySelector("#scoreKeyStrategySelect"),
@@ -533,7 +542,14 @@ const els = {
   scoreSourceText: document.querySelector("#scoreSourceText"),
   scoreOutputText: document.querySelector("#scoreOutputText"),
   scoreResultList: document.querySelector("#scoreResultList"),
-  scoreWarningsText: document.querySelector("#scoreWarningsText")
+  scoreWarningsText: document.querySelector("#scoreWarningsText"),
+  mobileCreatorOverlay: document.querySelector("#mobileCreatorOverlay"),
+  mobileCreatorCloseBtn: document.querySelector("#mobileCreatorCloseBtn"),
+  mobileCreatorStepSelect: document.querySelector("#mobileCreatorStepSelect"),
+  mobileCreatorSingleBtn: document.querySelector("#mobileCreatorSingleBtn"),
+  mobileCreatorChordBtn: document.querySelector("#mobileCreatorChordBtn"),
+  mobileCreatorGrid: document.querySelector("#mobileCreatorGrid"),
+  mobileCreatorAddBtn: document.querySelector("#mobileCreatorAddBtn")
 };
 
 let audioContext;
@@ -1705,13 +1721,34 @@ function scrollTimelineToActiveTile(tile) {
   });
 }
 
+function isMobileCreatorMode() {
+  return state.converterMode === "score" &&
+    typeof window !== "undefined" &&
+    window.matchMedia &&
+    window.matchMedia("(max-width: 780px)").matches;
+}
+
+function makeMobileAddTile() {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "event-tile mobile-add-tile";
+  button.setAttribute("aria-label", "Add Sky note box");
+  button.textContent = "+";
+  button.addEventListener("click", openMobileCreatorPad);
+  return button;
+}
+
 function renderTimeline(activeIndex = -1, options = {}) {
   els.timeline.innerHTML = "";
   if (!state.events.length) {
-    const empty = document.createElement("div");
-    empty.className = "event-tile rest";
-    empty.textContent = "Empty";
-    els.timeline.append(empty);
+    if (isMobileCreatorMode()) {
+      els.timeline.append(makeMobileAddTile());
+    } else {
+      const empty = document.createElement("div");
+      empty.className = "event-tile rest";
+      empty.textContent = "Empty";
+      els.timeline.append(empty);
+    }
   }
 
   let activeTile = null;
@@ -1724,11 +1761,15 @@ function renderTimeline(activeIndex = -1, options = {}) {
       activeTile = tile;
     }
     tile.title = "Remove this box";
-    tile.addEventListener("click", () => {
-      state.events.splice(index, 1);
-      renderAll();
-      setStatus("Removed box");
-    });
+    if (isMobileCreatorMode()) {
+      tile.title = "Sheet box";
+    } else {
+      tile.addEventListener("click", () => {
+        state.events.splice(index, 1);
+        renderAll();
+        setStatus("Removed box");
+      });
+    }
 
     if (event.type === "note") {
       tile.append(makeMiniGrid(event.notes));
@@ -1751,6 +1792,10 @@ function renderTimeline(activeIndex = -1, options = {}) {
     els.timeline.append(tile);
   });
 
+  if (state.events.length && isMobileCreatorMode()) {
+    els.timeline.append(makeMobileAddTile());
+  }
+
   const count = state.events.filter((event) => event.type !== "line").length;
   els.sheetMeta.textContent = `${count} box${count === 1 ? "" : "es"}`;
   if (options.followActive && activeTile) {
@@ -1761,6 +1806,91 @@ function renderTimeline(activeIndex = -1, options = {}) {
 function renderMode() {
   els.singleModeBtn.classList.toggle("active", !state.chordMode);
   els.chordModeBtn.classList.toggle("active", state.chordMode);
+}
+
+function renderScorePanelState() {
+  if (!els.scorePanel) return;
+  els.scorePanel.classList.toggle("is-collapsed", !state.scorePanelOpen);
+  if (els.scorePanelBody) els.scorePanelBody.hidden = !state.scorePanelOpen;
+  if (els.scoreToggleBtn) {
+    els.scoreToggleBtn.textContent = state.scorePanelOpen ? "Minimize" : "Open";
+    els.scoreToggleBtn.setAttribute("aria-expanded", state.scorePanelOpen ? "true" : "false");
+  }
+}
+
+function renderMobileCreatorPad() {
+  if (!els.mobileCreatorOverlay || !els.mobileCreatorGrid) return;
+  els.mobileCreatorOverlay.hidden = !state.mobileCreator.open;
+  if (state.mobileCreator.open) {
+    els.mobileCreatorOverlay.classList.add("is-open");
+  } else {
+    els.mobileCreatorOverlay.classList.remove("is-open");
+  }
+  if (els.mobileCreatorSingleBtn) els.mobileCreatorSingleBtn.classList.toggle("active", !state.mobileCreator.chordMode);
+  if (els.mobileCreatorChordBtn) els.mobileCreatorChordBtn.classList.toggle("active", state.mobileCreator.chordMode);
+  if (els.mobileCreatorAddBtn) els.mobileCreatorAddBtn.disabled = state.mobileCreator.pending.length === 0;
+
+  els.mobileCreatorGrid.innerHTML = "";
+  SKY_BUTTONS.forEach((button) => {
+    const key = document.createElement("button");
+    key.type = "button";
+    key.className = `sky-key row-${button.row.toLowerCase()}`;
+    if (state.mobileCreator.pending.includes(button.id)) key.classList.add("selected");
+    key.dataset.id = String(button.id);
+    key.setAttribute("aria-label", `${button.abc} ${getCellNote(button.id)}`);
+    const main = document.createElement("span");
+    main.className = "main-label";
+    main.textContent = labelForButton(button);
+    const sub = document.createElement("span");
+    sub.className = "sub-label";
+    sub.textContent = getCellNote(button.id);
+    key.append(main, sub);
+    key.addEventListener("click", () => handleMobileCreatorKey(button.id));
+    els.mobileCreatorGrid.append(key);
+  });
+}
+
+function openMobileCreatorPad() {
+  state.mobileCreator.open = true;
+  state.mobileCreator.pending = [];
+  state.mobileCreator.chordMode = state.chordMode;
+  if (els.mobileCreatorStepSelect) els.mobileCreatorStepSelect.value = String(state.duration);
+  renderMobileCreatorPad();
+}
+
+function closeMobileCreatorPad() {
+  state.mobileCreator.open = false;
+  state.mobileCreator.pending = [];
+  renderMobileCreatorPad();
+}
+
+function handleMobileCreatorKey(id) {
+  playButton(id);
+  if (state.mobileCreator.chordMode) {
+    if (state.mobileCreator.pending.includes(id)) {
+      state.mobileCreator.pending = state.mobileCreator.pending.filter((noteId) => noteId !== id);
+    } else {
+      state.mobileCreator.pending.push(id);
+    }
+  } else {
+    state.mobileCreator.pending = [id];
+  }
+  renderMobileCreatorPad();
+}
+
+function addMobileCreatorSelection() {
+  if (!state.mobileCreator.pending.length) return;
+  const duration = Number(els.mobileCreatorStepSelect ? els.mobileCreatorStepSelect.value : state.duration) || 1;
+  state.duration = duration;
+  state.events.push({
+    type: "note",
+    notes: [...new Set(state.mobileCreator.pending)].sort((a, b) => a - b),
+    duration
+  });
+  state.pending = [];
+  closeMobileCreatorPad();
+  renderAll();
+  setStatus("Added box");
 }
 
 function renderExport() {
@@ -2636,6 +2766,8 @@ function renderAll() {
   renderPending();
   renderKeyData();
   renderTimeline();
+  renderScorePanelState();
+  renderMobileCreatorPad();
   renderExport();
   renderChordAnalysis();
   renderScoreAnalysis();
@@ -9262,6 +9394,35 @@ function bindEvents() {
   if (els.dashboardCreatorBtn) {
     els.dashboardCreatorBtn.addEventListener("click", () => setConverterMode("score"));
   }
+  if (els.scoreToggleBtn) {
+    els.scoreToggleBtn.addEventListener("click", () => {
+      state.scorePanelOpen = !state.scorePanelOpen;
+      renderScorePanelState();
+    });
+  }
+  if (els.mobileCreatorCloseBtn) {
+    els.mobileCreatorCloseBtn.addEventListener("click", closeMobileCreatorPad);
+  }
+  if (els.mobileCreatorSingleBtn) {
+    els.mobileCreatorSingleBtn.addEventListener("click", () => {
+      state.mobileCreator.chordMode = false;
+      state.mobileCreator.pending = state.mobileCreator.pending.slice(0, 1);
+      renderMobileCreatorPad();
+    });
+  }
+  if (els.mobileCreatorChordBtn) {
+    els.mobileCreatorChordBtn.addEventListener("click", () => {
+      state.mobileCreator.chordMode = true;
+      renderMobileCreatorPad();
+    });
+  }
+  if (els.mobileCreatorAddBtn) {
+    els.mobileCreatorAddBtn.addEventListener("click", addMobileCreatorSelection);
+  }
+  window.addEventListener("resize", () => {
+    renderTimeline();
+    renderMobileCreatorPad();
+  });
   els.savedSongsBtn.addEventListener("click", openSavedSongs);
   els.marketplaceBtn.addEventListener("click", openMarketplace);
   if (els.refreshSavedSongsBtn) {

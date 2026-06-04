@@ -719,11 +719,13 @@
               <p id="scoreStatus">No score loaded</p>
             </div>
             <div class="transport">
+              <button id="scoreToggleBtn" class="ghost-button" type="button" aria-expanded="false">Open</button>
               <button id="analyzeScoreBtn" class="primary-button" type="button">Analyze score</button>
               <button id="importScoreBtn" class="ghost-button" type="button" disabled>Import score</button>
             </div>
           </div>
 
+          <div id="scorePanelBody" class="score-panel-body">
           <div class="score-grid">
             <label>
               <span>Score file</span>
@@ -815,6 +817,7 @@
               <textarea id="scoreWarningsText" spellcheck="false" readonly></textarea>
             </label>
           </div>
+          </div>
         </section>
 
         <section class="panel export-panel" aria-labelledby="exportTitle">
@@ -871,6 +874,36 @@
           </div>
         </section>
       </main>
+    </div>
+
+    <div id="mobileCreatorOverlay" class="mobile-creator-overlay" hidden>
+      <div class="mobile-creator-sheet" role="dialog" aria-modal="true" aria-labelledby="mobileCreatorTitle">
+        <div class="mobile-creator-head">
+          <div>
+            <span class="eyebrow">Add box</span>
+            <h2 id="mobileCreatorTitle">Virtual Sky Piano</h2>
+          </div>
+          <button id="mobileCreatorCloseBtn" class="ghost-button" type="button">Close</button>
+        </div>
+        <div class="mobile-creator-controls">
+          <label>
+            <span>Step</span>
+            <select id="mobileCreatorStepSelect">
+              <option value="0.5">1/2 beat</option>
+              <option value="1" selected>1 beat</option>
+              <option value="1.5">1 1/2 beats</option>
+              <option value="2">2 beats</option>
+              <option value="4">4 beats</option>
+            </select>
+          </label>
+          <div class="mode-switch" role="group" aria-label="Mobile entry mode">
+            <button id="mobileCreatorSingleBtn" class="mode-button active" type="button">Single</button>
+            <button id="mobileCreatorChordBtn" class="mode-button" type="button">Chord</button>
+          </div>
+        </div>
+        <div id="mobileCreatorGrid" class="mobile-creator-grid" aria-label="Mobile Sky piano buttons"></div>
+        <button id="mobileCreatorAddBtn" class="primary-button" type="button" disabled>Add</button>
+      </div>
     </div>
 
     <script src="app.js"></script>

@@ -1623,6 +1623,21 @@ label span,
   grid-column: 1 / 4;
 }
 
+.score-panel.is-collapsed {
+  min-height: 0;
+}
+
+.score-panel.is-collapsed .score-panel-body,
+.score-panel.is-collapsed #analyzeScoreBtn,
+.score-panel.is-collapsed #importScoreBtn {
+  display: none;
+}
+
+.score-panel-body {
+  display: grid;
+  gap: 12px;
+}
+
 .audio-grid {
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   align-items: end;
@@ -1808,6 +1823,73 @@ textarea {
   border-style: dashed;
   background: transparent;
   box-shadow: none;
+}
+
+.mobile-add-tile {
+  display: none;
+  place-items: center;
+  color: #ffffff;
+  border: 1px dashed rgba(115, 167, 255, 0.56);
+  background: linear-gradient(135deg, rgba(115, 167, 255, 0.28), rgba(167, 139, 250, 0.22));
+  font-size: 2.35rem;
+  font-weight: 900;
+}
+
+.mobile-creator-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  align-items: end;
+  padding: 14px;
+  background: rgba(3, 4, 10, 0.66);
+  backdrop-filter: blur(14px);
+}
+
+.mobile-creator-overlay[hidden] {
+  display: none;
+}
+
+.mobile-creator-sheet {
+  display: grid;
+  gap: 14px;
+  width: min(720px, 100%);
+  max-height: min(88vh, 780px);
+  margin: 0 auto;
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 18px;
+  background: rgba(10, 16, 32, 0.94);
+  box-shadow: 0 26px 90px rgba(0, 0, 0, 0.5);
+}
+
+.mobile-creator-head,
+.mobile-creator-controls {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mobile-creator-head h2 {
+  margin: 0;
+  color: #ffffff;
+  font-size: 1.12rem;
+}
+
+.mobile-creator-controls label {
+  flex: 1 1 150px;
+}
+
+.mobile-creator-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.mobile-creator-grid .sky-key {
+  min-height: 64px;
 }
 
 .mini-grid {
@@ -2720,6 +2802,52 @@ textarea::placeholder {
   .wizard-result-actions {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .view-score .piano-panel {
+    order: 1;
+    min-height: 0;
+    padding: 12px;
+  }
+
+  .view-score .piano-panel .panel-heading,
+  .view-score .piano-panel > .sky-grid,
+  .view-score .piano-panel .chord-tray {
+    display: none;
+  }
+
+  .view-score .piano-panel .control-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin: 0;
+  }
+
+  .view-score .piano-panel .control-grid label:nth-child(3) {
+    display: none;
+  }
+
+  .view-score .sheet-panel {
+    order: 2;
+    min-height: 0;
+  }
+
+  .view-score .sheet-panel .song-fields,
+  .view-score .sheet-panel .edit-actions {
+    display: none;
+  }
+
+  .view-score .timeline {
+    min-height: 282px;
+    max-height: 56vh;
+  }
+
+  .view-score .mobile-add-tile {
+    display: grid;
+  }
+
+  .view-score .score-panel {
+    order: 3;
   }
 
   .dashboard-hero,
