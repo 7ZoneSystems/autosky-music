@@ -319,6 +319,7 @@
             <div class="transport">
               <button id="playBtn" class="primary-button" type="button">Play</button>
               <button id="stopBtn" class="ghost-button" type="button">Stop</button>
+              <button id="liveStudioBtn" class="ghost-button live-studio-action" type="button">Live studio</button>
               <button id="audioSheetRegenerateBtn" class="ghost-button" type="button">Regenerate</button>
             </div>
           </div>
@@ -904,6 +905,40 @@
         <div id="mobileCreatorGrid" class="mobile-creator-grid" aria-label="Mobile Sky piano buttons"></div>
         <button id="mobileCreatorAddBtn" class="primary-button" type="button" disabled>Add</button>
       </div>
+    </div>
+
+    <div id="liveStudioOverlay" class="live-studio-overlay" hidden>
+      <section class="live-studio-panel" role="dialog" aria-modal="true" aria-labelledby="liveStudioTitle">
+        <div class="live-studio-head">
+          <div>
+            <span class="eyebrow">Creator mode</span>
+            <h2 id="liveStudioTitle">Live Studio</h2>
+          </div>
+          <button id="liveStudioCloseBtn" class="ghost-button" type="button">Close</button>
+        </div>
+
+        <div id="liveStudioLandscapePrompt" class="live-studio-landscape" hidden>
+          <span class="eyebrow">Mobile setup</span>
+          <h3>Turn your phone to landscape mode.</h3>
+          <p>The studio records exact tap timing, so the wider Sky piano layout is required before Start becomes available.</p>
+        </div>
+
+        <div class="live-studio-toolbar">
+          <button id="liveStudioStartBtn" class="primary-button" type="button">Start</button>
+          <button id="liveStudioStopBtn" class="ghost-button" type="button" disabled>Stop</button>
+          <div class="live-studio-readout" aria-live="polite">
+            <span id="liveStudioTimer">00:00.0</span>
+            <span id="liveStudioCount">0 hits</span>
+          </div>
+          <div class="mode-switch" role="group" aria-label="Live studio grouping">
+            <button id="liveStudioSingleBtn" class="mode-button active" type="button">Single</button>
+            <button id="liveStudioChordBtn" class="mode-button" type="button">Chord</button>
+          </div>
+        </div>
+
+        <p id="liveStudioHint" class="live-studio-hint">Press Start, then play the Sky keys. Stop converts your live timing into sheet boxes.</p>
+        <div id="liveStudioGrid" class="live-studio-grid" aria-label="Live studio Sky piano buttons"></div>
+      </section>
     </div>
 
     <script src="app.js"></script>

@@ -260,6 +260,9 @@ const SCORE_ARRANGEMENT_LIMITS = {
 };
 const AUTO_CONFIG_MAX_MS = 5 * 60 * 1000;
 const AUTO_CONFIG_TARGET_SCORE = 0.82;
+const LIVE_STUDIO_CHORD_WINDOW_SECONDS = 0.16;
+const LIVE_STUDIO_GRID_STEP = 0.0625;
+const LIVE_STUDIO_MIN_NOTE_BEATS = 0.125;
 const TWO_PI = Math.PI * 2;
 const KEY_ALIASES = new Map();
 KEY_CONFIGS.forEach((config) => {
@@ -360,6 +363,15 @@ const state = {
     open: false,
     chordMode: false,
     pending: []
+  },
+  liveStudio: {
+    open: false,
+    recording: false,
+    chordMode: false,
+    startedAt: 0,
+    elapsedSeconds: 0,
+    groups: [],
+    timer: null
   }
 };
 
@@ -549,7 +561,19 @@ const els = {
   mobileCreatorSingleBtn: document.querySelector("#mobileCreatorSingleBtn"),
   mobileCreatorChordBtn: document.querySelector("#mobileCreatorChordBtn"),
   mobileCreatorGrid: document.querySelector("#mobileCreatorGrid"),
-  mobileCreatorAddBtn: document.querySelector("#mobileCreatorAddBtn")
+  mobileCreatorAddBtn: document.querySelector("#mobileCreatorAddBtn"),
+  liveStudioBtn: document.querySelector("#liveStudioBtn"),
+  liveStudioOverlay: document.querySelector("#liveStudioOverlay"),
+  liveStudioCloseBtn: document.querySelector("#liveStudioCloseBtn"),
+  liveStudioLandscapePrompt: document.querySelector("#liveStudioLandscapePrompt"),
+  liveStudioStartBtn: document.querySelector("#liveStudioStartBtn"),
+  liveStudioStopBtn: document.querySelector("#liveStudioStopBtn"),
+  liveStudioTimer: document.querySelector("#liveStudioTimer"),
+  liveStudioCount: document.querySelector("#liveStudioCount"),
+  liveStudioSingleBtn: document.querySelector("#liveStudioSingleBtn"),
+  liveStudioChordBtn: document.querySelector("#liveStudioChordBtn"),
+  liveStudioHint: document.querySelector("#liveStudioHint"),
+  liveStudioGrid: document.querySelector("#liveStudioGrid")
 };
 
 let audioContext;
@@ -1728,6 +1752,253 @@ function isMobileCreatorMode() {
     window.matchMedia("(max-width: 780px)").matches;
 }
 
+function isMobileViewport() {
+  return typeof window !== "undefined" &&
+    window.matchMedia &&
+    window.matchMedia("(max-width: 780px), (pointer: coarse)").matches;
+}
+
+function isLiveStudioLandscapeReady() {
+  if (!isMobileViewport()) return true;
+  return window.innerWidth >= window.innerHeight;
+}
+
+function formatLiveStudioTime(seconds) {
+  const safeSeconds = Math.max(0, Number(seconds) || 0);
+  const minutes = Math.floor(safeSeconds / 60);
+  const wholeSeconds = Math.floor(safeSeconds % 60);
+  const tenths = Math.floor((safeSeconds % 1) * 10);
+  return `${String(minutes).padStart(2, "0")}:${String(wholeSeconds).padStart(2, "0")}.${tenths}`;
+}
+
+function liveStudioElapsedSeconds() {
+  if (!state.liveStudio.recording) return state.liveStudio.elapsedSeconds;
+  return Math.max(0, (performance.now() - state.liveStudio.startedAt) / 1000);
+}
+
+function clearLiveStudioTimer() {
+  if (!state.liveStudio.timer) return;
+  window.clearInterval(state.liveStudio.timer);
+  state.liveStudio.timer = null;
+}
+
+function renderLiveStudioReadout() {
+  if (els.liveStudioTimer) els.liveStudioTimer.textContent = formatLiveStudioTime(liveStudioElapsedSeconds());
+  if (els.liveStudioCount) {
+    const groupCount = state.liveStudio.groups.length;
+    const hitCount = state.liveStudio.groups.reduce((total, group) => total + group.notes.length, 0);
+    els.liveStudioCount.textContent = `${hitCount} hit${hitCount === 1 ? "" : "s"} / ${groupCount} box${groupCount === 1 ? "" : "es"}`;
+  }
+}
+
+function flashLiveStudioKey(id, milliseconds = 160) {
+  if (!els.liveStudioGrid) return;
+  const key = els.liveStudioGrid.querySelector(`[data-id="${id}"]`);
+  if (!key) return;
+  key.classList.add("playing");
+  window.setTimeout(() => key.classList.remove("playing"), milliseconds);
+}
+
+function renderLiveStudioGrid() {
+  if (!els.liveStudioGrid) return;
+  els.liveStudioGrid.innerHTML = "";
+  const ready = isLiveStudioLandscapeReady();
+  SKY_BUTTONS.forEach((button) => {
+    const key = document.createElement("button");
+    key.type = "button";
+    key.className = `sky-key row-${button.row.toLowerCase()}`;
+    key.dataset.id = String(button.id);
+    key.disabled = !ready;
+    key.setAttribute("aria-label", `${button.abc} ${getCellNote(button.id)}`);
+
+    const main = document.createElement("span");
+    main.className = "main-label";
+    main.textContent = labelForButton(button);
+
+    const sub = document.createElement("span");
+    sub.className = "sub-label";
+    sub.textContent = state.notation === "note" ? button.abc : getCellNote(button.id);
+
+    key.append(main, sub);
+    key.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      handleLiveStudioKey(button.id);
+    });
+    key.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      handleLiveStudioKey(button.id);
+    });
+    els.liveStudioGrid.append(key);
+  });
+}
+
+function renderLiveStudio() {
+  if (!els.liveStudioOverlay) return;
+  const ready = isLiveStudioLandscapeReady();
+  els.liveStudioOverlay.hidden = !state.liveStudio.open;
+  els.liveStudioOverlay.classList.toggle("is-open", state.liveStudio.open);
+  els.liveStudioOverlay.classList.toggle("needs-landscape", state.liveStudio.open && !ready);
+  if (els.liveStudioLandscapePrompt) {
+    els.liveStudioLandscapePrompt.hidden = !state.liveStudio.open || ready;
+  }
+  if (els.liveStudioStartBtn) els.liveStudioStartBtn.disabled = state.liveStudio.recording || !ready;
+  if (els.liveStudioStopBtn) els.liveStudioStopBtn.disabled = !state.liveStudio.recording;
+  if (els.liveStudioSingleBtn) els.liveStudioSingleBtn.classList.toggle("active", !state.liveStudio.chordMode);
+  if (els.liveStudioChordBtn) els.liveStudioChordBtn.classList.toggle("active", state.liveStudio.chordMode);
+  if (els.liveStudioHint) {
+    els.liveStudioHint.textContent = !ready
+      ? "Rotate to landscape, then press Start."
+      : state.liveStudio.recording
+        ? state.liveStudio.chordMode
+          ? "Recording. Fast taps within the chord window become one Sky chord box."
+          : "Recording. Every key press becomes a timed Sky sheet box."
+        : "Press Start, then play the Sky keys. Stop converts your live timing into sheet boxes.";
+  }
+  if (state.liveStudio.open) renderLiveStudioGrid();
+  renderLiveStudioReadout();
+}
+
+function openLiveStudio() {
+  if (state.converterMode !== "score") setConverterMode("score");
+  stopPlayback();
+  closeMobileCreatorPad();
+  state.liveStudio.open = true;
+  state.liveStudio.recording = false;
+  state.liveStudio.chordMode = state.chordMode;
+  state.liveStudio.elapsedSeconds = 0;
+  state.liveStudio.groups = [];
+  clearLiveStudioTimer();
+  renderLiveStudio();
+  setStatus(isLiveStudioLandscapeReady() ? "Live studio ready" : "Rotate to landscape for live studio");
+}
+
+function closeLiveStudio() {
+  if (state.liveStudio.recording) {
+    stopLiveStudio();
+    return;
+  }
+  state.liveStudio.open = false;
+  state.liveStudio.groups = [];
+  state.liveStudio.elapsedSeconds = 0;
+  clearLiveStudioTimer();
+  renderLiveStudio();
+  setStatus("Live studio closed");
+}
+
+async function startLiveStudio() {
+  if (!isLiveStudioLandscapeReady()) {
+    renderLiveStudio();
+    setStatus("Rotate to landscape before starting live studio");
+    return;
+  }
+
+  stopPlayback();
+  const ctx = getAudioContext();
+  if (ctx.state === "suspended") {
+    await ctx.resume();
+  }
+
+  state.liveStudio.recording = true;
+  state.liveStudio.startedAt = performance.now();
+  state.liveStudio.elapsedSeconds = 0;
+  state.liveStudio.groups = [];
+  clearLiveStudioTimer();
+  state.liveStudio.timer = window.setInterval(renderLiveStudioReadout, 100);
+  renderLiveStudio();
+  setStatus("Live studio recording");
+}
+
+function quantizeLiveStudioBeats(beats, minimum = 0) {
+  const rounded = Math.round((Number(beats) || 0) / LIVE_STUDIO_GRID_STEP) * LIVE_STUDIO_GRID_STEP;
+  return Number(Math.max(minimum, rounded).toFixed(4));
+}
+
+function liveStudioGroupsToEvents(groups) {
+  const beatSeconds = 60 / Math.max(30, Math.min(240, Number(state.bpm) || 96));
+  const cleanedGroups = groups
+    .map((group) => ({
+      time: Math.max(0, Number(group.time) || 0),
+      notes: [...new Set((group.notes || []).filter((id) => id >= 1 && id <= 15))].sort((a, b) => a - b)
+    }))
+    .filter((group) => group.notes.length)
+    .sort((a, b) => a.time - b.time);
+
+  const events = [];
+  let cursorBeat = 0;
+  cleanedGroups.forEach((group, index) => {
+    const startBeat = group.time / beatSeconds;
+    const gapBeats = startBeat - cursorBeat;
+    if (gapBeats >= LIVE_STUDIO_MIN_NOTE_BEATS) {
+      const restDuration = quantizeLiveStudioBeats(gapBeats, LIVE_STUDIO_MIN_NOTE_BEATS);
+      if (restDuration >= LIVE_STUDIO_MIN_NOTE_BEATS) {
+        events.push({ type: "rest", duration: restDuration });
+        cursorBeat += restDuration;
+      }
+    }
+
+    const nextGroup = cleanedGroups[index + 1];
+    const fallbackDuration = Math.max(0.5, Math.min(2, Number(state.duration) || 1));
+    const nextStartBeat = nextGroup ? Math.max(startBeat + LIVE_STUDIO_MIN_NOTE_BEATS, nextGroup.time / beatSeconds) : startBeat + fallbackDuration;
+    const noteDuration = quantizeLiveStudioBeats(nextStartBeat - startBeat, LIVE_STUDIO_MIN_NOTE_BEATS);
+    events.push({
+      type: "note",
+      notes: group.notes,
+      duration: noteDuration
+    });
+    cursorBeat = Math.max(cursorBeat, startBeat) + noteDuration;
+  });
+
+  return events;
+}
+
+function stopLiveStudio() {
+  if (!state.liveStudio.recording) return;
+  state.liveStudio.elapsedSeconds = liveStudioElapsedSeconds();
+  state.liveStudio.recording = false;
+  clearLiveStudioTimer();
+
+  const capturedEvents = liveStudioGroupsToEvents(state.liveStudio.groups);
+  if (capturedEvents.length) {
+    state.events = capturedEvents;
+    state.pending = [];
+    state.liveStudio.open = false;
+    setStatus(`Live studio captured ${capturedEvents.length} timed boxes`);
+  } else {
+    state.liveStudio.open = false;
+    setStatus("Live studio stopped with no keys");
+  }
+  renderAll();
+}
+
+function handleLiveStudioKey(id) {
+  if (!state.liveStudio.open) return;
+  if (!isLiveStudioLandscapeReady()) {
+    setStatus("Rotate to landscape before playing live studio");
+    renderLiveStudio();
+    return;
+  }
+
+  playButton(id);
+  flashLiveStudioKey(id);
+
+  if (!state.liveStudio.recording) {
+    setStatus(`Preview ${labelForButton(getButton(id))}`);
+    return;
+  }
+
+  const time = liveStudioElapsedSeconds();
+  const groups = state.liveStudio.groups;
+  const lastGroup = groups[groups.length - 1];
+  if (state.liveStudio.chordMode && lastGroup && time - lastGroup.time <= LIVE_STUDIO_CHORD_WINDOW_SECONDS) {
+    if (!lastGroup.notes.includes(id)) lastGroup.notes.push(id);
+    lastGroup.notes.sort((a, b) => a - b);
+  } else {
+    groups.push({ time, notes: [id] });
+  }
+  renderLiveStudioReadout();
+}
+
 function makeMobileAddTile() {
   const button = document.createElement("button");
   button.type = "button";
@@ -2768,6 +3039,7 @@ function renderAll() {
   renderTimeline();
   renderScorePanelState();
   renderMobileCreatorPad();
+  renderLiveStudio();
   renderExport();
   renderChordAnalysis();
   renderScoreAnalysis();
@@ -9419,9 +9691,38 @@ function bindEvents() {
   if (els.mobileCreatorAddBtn) {
     els.mobileCreatorAddBtn.addEventListener("click", addMobileCreatorSelection);
   }
+  if (els.liveStudioBtn) {
+    els.liveStudioBtn.addEventListener("click", openLiveStudio);
+  }
+  if (els.liveStudioCloseBtn) {
+    els.liveStudioCloseBtn.addEventListener("click", closeLiveStudio);
+  }
+  if (els.liveStudioStartBtn) {
+    els.liveStudioStartBtn.addEventListener("click", () => {
+      startLiveStudio().catch((error) => {
+        setStatus(error.message || "Live studio could not start audio");
+      });
+    });
+  }
+  if (els.liveStudioStopBtn) {
+    els.liveStudioStopBtn.addEventListener("click", stopLiveStudio);
+  }
+  if (els.liveStudioSingleBtn) {
+    els.liveStudioSingleBtn.addEventListener("click", () => {
+      state.liveStudio.chordMode = false;
+      renderLiveStudio();
+    });
+  }
+  if (els.liveStudioChordBtn) {
+    els.liveStudioChordBtn.addEventListener("click", () => {
+      state.liveStudio.chordMode = true;
+      renderLiveStudio();
+    });
+  }
   window.addEventListener("resize", () => {
     renderTimeline();
     renderMobileCreatorPad();
+    renderLiveStudio();
   });
   els.savedSongsBtn.addEventListener("click", openSavedSongs);
   els.marketplaceBtn.addEventListener("click", openMarketplace);
@@ -9641,13 +9942,24 @@ function bindEvents() {
   els.authorInput.addEventListener("input", renderExport);
 
   document.addEventListener("keydown", (event) => {
-    if (state.converterMode === "landing" || state.converterMode === "login" || state.converterMode === "home" || state.converterMode === "dashboard" || state.converterMode === "saved" || state.converterMode === "marketplace") return;
     const target = event.target;
     if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return;
 
     const key = event.key.toUpperCase();
     const normalized = key === ":" ? ";" : key === "<" ? "," : key === ">" ? "." : key === "?" ? "/" : key;
     const button = SKY_BUTTONS.find((item) => item.keyboard === normalized);
+    if (state.liveStudio.open) {
+      if (button) {
+        event.preventDefault();
+        handleLiveStudioKey(button.id);
+      } else if (key === "ESCAPE") {
+        event.preventDefault();
+        closeLiveStudio();
+      }
+      return;
+    }
+
+    if (state.converterMode === "landing" || state.converterMode === "login" || state.converterMode === "home" || state.converterMode === "dashboard" || state.converterMode === "saved" || state.converterMode === "marketplace") return;
     if (button) {
       event.preventDefault();
       handleButtonPress(button.id);
