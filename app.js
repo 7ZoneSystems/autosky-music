@@ -258,6 +258,8 @@ const SCORE_ARRANGEMENT_LIMITS = {
   balanced: { maxCombinedEvents: 2300, harmonyShare: 0.58, bassShare: 0.64, splitThreshold: 4 },
   full: { maxCombinedEvents: 3200, harmonyShare: 0.88, bassShare: 0.9, splitThreshold: 3 }
 };
+const AUTO_CONFIG_MAX_MS = 5 * 60 * 1000;
+const AUTO_CONFIG_TARGET_SCORE = 0.82;
 const TWO_PI = Math.PI * 2;
 const KEY_ALIASES = new Map();
 KEY_CONFIGS.forEach((config) => {
@@ -287,7 +289,8 @@ const state = {
     sheets: [],
     loading: false,
     status: "Shared Sky sheets from creators.",
-    search: ""
+    search: "",
+    focusId: null
   },
   keyId: "C",
   notation: "abc",
@@ -388,6 +391,8 @@ const els = {
   wizardChordSensitivityInput: document.querySelector("#wizardChordSensitivityInput"),
   audioSensitivityNextBtn: document.querySelector("#audioSensitivityNextBtn"),
   wizardFeelDensitySelect: document.querySelector("#wizardFeelDensitySelect"),
+  wizardAutoConfigSelect: document.querySelector("#wizardAutoConfigSelect"),
+  wizardMelodyToneSelect: document.querySelector("#wizardMelodyToneSelect"),
   wizardPlayabilitySelect: document.querySelector("#wizardPlayabilitySelect"),
   wizardBpmInput: document.querySelector("#wizardBpmInput"),
   wizardAutoBpmInput: document.querySelector("#wizardAutoBpmInput"),
@@ -454,6 +459,8 @@ const els = {
   minChordSelect: document.querySelector("#minChordSelect"),
   chordSensitivityInput: document.querySelector("#chordSensitivityInput"),
   melodySensitivityInput: document.querySelector("#melodySensitivityInput"),
+  autoConfigSelect: document.querySelector("#autoConfigSelect"),
+  melodyToneSelect: document.querySelector("#melodyToneSelect"),
   analysisProfileSelect: document.querySelector("#analysisProfileSelect"),
   feelDensitySelect: document.querySelector("#feelDensitySelect"),
   playabilitySelect: document.querySelector("#playabilitySelect"),
@@ -469,6 +476,7 @@ const els = {
   combinedCountText: document.querySelector("#combinedCountText"),
   playableCountText: document.querySelector("#playableCountText"),
   matchScoreText: document.querySelector("#matchScoreText"),
+  autoConfigText: document.querySelector("#autoConfigText"),
   recoveredCountText: document.querySelector("#recoveredCountText"),
   audioDurationText: document.querySelector("#audioDurationText"),
   chordOutputText: document.querySelector("#chordOutputText"),
@@ -1044,35 +1052,75 @@ async function loadCloudSheet(id, options = {}) {
   }
 }
 
-async function publishSavedSheet(sheetId) {
+async function publishSavedSheet(sheetId, options = {}) {
   if (!state.auth.user) {
     setConverterMode("login");
     return;
   }
 
-  setCloudStatus("Uploading saved sheet to marketplace");
-  if (els.savedSongsStatus) els.savedSongsStatus.textContent = "Uploading saved sheet to marketplace";
+  const isUpdate = Boolean(options.marketplaceId);
+  setCloudStatus(isUpdate ? "Updating marketplace sheet" : "Uploading saved sheet to marketplace");
+  if (els.savedSongsStatus) els.savedSongsStatus.textContent = isUpdate ? "Updating marketplace sheet" : "Uploading saved sheet to marketplace";
 
   try {
     const response = await fetch("/api/marketplace", {
       method: "POST",
       credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "publish", sheetId })
+      body: JSON.stringify({
+        action: isUpdate ? "update" : "publish",
+        sheetId,
+        marketplaceId: options.marketplaceId || undefined
+      })
     });
     const payload = await response.json();
-    if (!response.ok) throw new Error(payload.error || "Marketplace upload failed");
-    setStatus("Uploaded to marketplace");
+    if (!response.ok) {
+      const message = marketplaceFailureMessage(payload, isUpdate ? "Marketplace update failed" : "Marketplace upload failed");
+      setCloudStatus(message);
+      if (els.savedSongsStatus) {
+        if (payload.duplicate) {
+          renderMarketplaceLinkNotice(els.savedSongsStatus, payload.error || "same sheet exists", payload.duplicate);
+        } else {
+          els.savedSongsStatus.textContent = message;
+        }
+      }
+      setStatus(message);
+      return;
+    }
+    setStatus(payload.action === "updated" ? "Updated marketplace sheet" : "Uploaded to marketplace");
     state.marketplace.search = "";
+    state.marketplace.focusId = payload.sheet && payload.sheet.id ? payload.sheet.id : null;
     if (els.marketplaceSearchInput) els.marketplaceSearchInput.value = "";
     await fetchMarketplace({ silent: true });
     setConverterMode("marketplace");
   } catch (error) {
-    const message = error.message || "Marketplace upload failed";
+    const message = error.message || (isUpdate ? "Marketplace update failed" : "Marketplace upload failed");
     setCloudStatus(message);
     if (els.savedSongsStatus) els.savedSongsStatus.textContent = message;
     setStatus(message);
   }
+}
+
+function marketplaceFailureMessage(payload, fallback) {
+  if (!payload || typeof payload !== "object") return fallback;
+  if (payload.duplicate && payload.duplicate.url) {
+    return `${payload.error || "same sheet exists"}: ${payload.duplicate.url}`;
+  }
+  return payload.error || fallback;
+}
+
+function renderMarketplaceLinkNotice(target, message, duplicate) {
+  if (!target || !duplicate || !duplicate.id) return;
+  target.innerHTML = "";
+  target.append(document.createTextNode(`${message}: `));
+  const link = document.createElement("a");
+  link.href = duplicate.url || `?marketplace=${encodeURIComponent(duplicate.id)}`;
+  link.textContent = duplicate.title ? `Open "${duplicate.title}"` : "Open existing marketplace sheet";
+  link.addEventListener("click", (event) => {
+    event.preventDefault();
+    openMarketplaceLink(duplicate.id);
+  });
+  target.append(link);
 }
 
 function setMarketplaceStatus(text) {
@@ -1110,6 +1158,8 @@ function renderMarketplace() {
   state.marketplace.sheets.forEach((sheet) => {
     const card = document.createElement("article");
     card.className = "marketplace-card";
+    if (sheet.id === state.marketplace.focusId) card.classList.add("focused");
+    if (sheet.deleteAfterAt) card.classList.add("pending-delete");
 
     const creator = document.createElement("div");
     creator.className = "marketplace-creator";
@@ -1123,7 +1173,9 @@ function renderMarketplace() {
     const owner = document.createElement("strong");
     owner.textContent = sheet.ownerName || "Sky creator";
     const published = document.createElement("span");
-    published.textContent = `Published ${formatCloudDate(sheet.publishedAt)}`;
+    published.textContent = sheet.deleteAfterAt
+      ? `Deletion scheduled ${formatCloudDate(sheet.deleteAfterAt)}`
+      : `Published ${formatCloudDate(sheet.publishedAt)}`;
     creatorText.append(owner, published);
     creator.append(avatar, creatorText);
 
@@ -1132,6 +1184,14 @@ function renderMarketplace() {
 
     const meta = document.createElement("p");
     meta.textContent = `${sheet.keyId || "C"} · ${sheet.bpm || 96} BPM · ${sheet.eventCount || 0} boxes`;
+
+    const ownerNotice = document.createElement("p");
+    ownerNotice.className = "marketplace-notice";
+    ownerNotice.textContent = sheet.deleteAfterAt
+      ? "Deletion is scheduled. This sheet will be removed from marketplace in 24 hours."
+      : sheet.isOwner
+        ? "Uploaded by you. You can update it from the original saved sheet."
+        : "";
 
     const rating = document.createElement("div");
     rating.className = "marketplace-rating";
@@ -1144,7 +1204,12 @@ function renderMarketplace() {
       button.type = "button";
       button.textContent = "★";
       button.className = value <= Number(sheet.myRating || 0) ? "active" : "";
-      button.title = state.auth.user ? `Rate ${value} out of 5` : "Sign in to rate";
+      button.disabled = !state.auth.user || sheet.isOwner || Boolean(sheet.deleteAfterAt);
+      button.title = sheet.isOwner
+        ? "You cannot rate your own sheet"
+        : state.auth.user
+          ? `Rate ${value} out of 5`
+          : "Sign in to rate";
       button.addEventListener("click", () => rateMarketplaceSheet(sheet.id, value));
       stars.append(button);
     }
@@ -1165,8 +1230,28 @@ function renderMarketplace() {
     playButton.addEventListener("click", () => loadMarketplaceSheet(sheet.id, { playAfterLoad: true }));
 
     actions.append(importButton, playButton);
+    if (sheet.isOwner) {
+      const updateButton = document.createElement("button");
+      updateButton.type = "button";
+      updateButton.className = "ghost-button";
+      updateButton.textContent = "Update";
+      updateButton.disabled = !sheet.sourceSheetId;
+      updateButton.title = sheet.sourceSheetId ? "Update from your saved sheet" : "Original saved sheet is not available";
+      updateButton.addEventListener("click", () => publishSavedSheet(sheet.sourceSheetId, { marketplaceId: sheet.id }));
 
-    card.append(creator, title, meta, rating, actions);
+      const deleteButton = document.createElement("button");
+      deleteButton.type = "button";
+      deleteButton.className = "ghost-button danger-button";
+      deleteButton.textContent = sheet.deleteAfterAt ? "Delete scheduled" : "Delete in 24h";
+      deleteButton.disabled = Boolean(sheet.deleteAfterAt);
+      deleteButton.addEventListener("click", () => deleteMarketplaceSheet(sheet.id));
+
+      actions.append(updateButton, deleteButton);
+    }
+
+    card.append(creator, title, meta);
+    if (ownerNotice.textContent) card.append(ownerNotice);
+    card.append(rating, actions);
     els.marketplaceList.append(card);
   });
 }
@@ -1182,8 +1267,20 @@ async function fetchMarketplace(options = {}) {
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || "Marketplace unavailable");
     state.marketplace.sheets = Array.isArray(payload.sheets) ? payload.sheets : [];
+    if (state.marketplace.focusId && !state.marketplace.sheets.some((sheet) => sheet.id === state.marketplace.focusId)) {
+      const focusedResponse = await fetch(`/api/marketplace?id=${encodeURIComponent(state.marketplace.focusId)}`, { credentials: "same-origin" });
+      const focusedPayload = await focusedResponse.json().catch(() => ({}));
+      if (focusedResponse.ok && focusedPayload.sheet) {
+        state.marketplace.sheets = [
+          focusedPayload.sheet,
+          ...state.marketplace.sheets.filter((sheet) => sheet.id !== focusedPayload.sheet.id)
+        ];
+      }
+    }
     setMarketplaceStatus(state.marketplace.sheets.length
-      ? `${state.marketplace.sheets.length} shared sheet${state.marketplace.sheets.length === 1 ? "" : "s"}`
+      ? state.marketplace.focusId
+        ? "Marketplace link loaded"
+        : `${state.marketplace.sheets.length} shared sheet${state.marketplace.sheets.length === 1 ? "" : "s"}`
       : state.marketplace.search
         ? "No sheets match that name"
         : "No marketplace sheets yet");
@@ -1197,6 +1294,21 @@ async function fetchMarketplace(options = {}) {
 
 function openMarketplace() {
   setConverterMode("marketplace");
+}
+
+function openMarketplaceLink(id) {
+  if (!id) return;
+  state.marketplace.focusId = id;
+  state.marketplace.search = "";
+  if (els.marketplaceSearchInput) els.marketplaceSearchInput.value = "";
+  setConverterMode("marketplace");
+}
+
+function handleInitialMarketplaceLink() {
+  const url = new URL(window.location.href);
+  const marketplaceId = url.searchParams.get("marketplace");
+  if (!marketplaceId) return;
+  openMarketplaceLink(marketplaceId);
 }
 
 function scheduleMarketplaceSearch() {
@@ -1267,6 +1379,40 @@ async function rateMarketplaceSheet(id, rating) {
     fetchMarketplace({ silent: true });
   } catch (error) {
     const message = error.message || "Rating failed";
+    setMarketplaceStatus(message);
+    setStatus(message);
+  }
+}
+
+async function deleteMarketplaceSheet(id) {
+  if (!state.auth.user) {
+    setMarketplaceStatus("Sign in to delete your marketplace sheets");
+    setConverterMode("login");
+    return;
+  }
+
+  const sheet = state.marketplace.sheets.find((item) => item.id === id);
+  const label = sheet ? sheet.title : "this marketplace sheet";
+  if (!window.confirm(`Schedule "${label}" for marketplace deletion? It will be removed after 24 hours.`)) return;
+
+  setMarketplaceStatus("Scheduling marketplace deletion");
+  try {
+    const response = await fetch("/api/marketplace", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "delete", marketplaceId: id })
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || "Marketplace delete failed");
+    state.marketplace.sheets = state.marketplace.sheets.map((item) => (
+      item.id === id ? { ...item, ...payload.sheet } : item
+    ));
+    setMarketplaceStatus("Delete scheduled. This marketplace sheet will be removed in 24 hours.");
+    renderMarketplace();
+    fetchMarketplace({ silent: true });
+  } catch (error) {
+    const message = error.message || "Marketplace delete failed";
     setMarketplaceStatus(message);
     setStatus(message);
   }
@@ -2210,6 +2356,19 @@ function renderChordAnalysis() {
   if (els.matchScoreText) {
     els.matchScoreText.textContent = analysis.quality ? `${Math.round(analysis.quality.score * 100)}%` : "-";
   }
+  if (els.autoConfigText) {
+    const autoConfig = analysis.autoConfig;
+    if (autoConfig && autoConfig.candidate) {
+      const rawScore = autoConfig.bestScore ?? autoConfig.familiarityScore;
+      const score = Number.isFinite(rawScore)
+        ? Math.round(rawScore * 100)
+        : null;
+      const tried = autoConfig.tried ? `${autoConfig.tried} tried` : "auto";
+      els.autoConfigText.textContent = `${autoConfig.candidate.name || "Best preset"} (${score === null ? tried : `${score}% / ${tried}`})`;
+    } else {
+      els.autoConfigText.textContent = "Manual";
+    }
+  }
   if (els.recoveredCountText) {
     const correction = analysis.correctionSummary;
     const recovered = correction ? correction.melodyAdded + correction.backgroundAdded + correction.rhythmAdded : 0;
@@ -2577,6 +2736,12 @@ function syncAudioWizardControls() {
   }
   if (els.wizardFeelDensitySelect && els.feelDensitySelect) {
     els.feelDensitySelect.value = els.wizardFeelDensitySelect.value;
+  }
+  if (els.wizardAutoConfigSelect && els.autoConfigSelect) {
+    els.autoConfigSelect.value = els.wizardAutoConfigSelect.value;
+  }
+  if (els.wizardMelodyToneSelect && els.melodyToneSelect) {
+    els.melodyToneSelect.value = els.wizardMelodyToneSelect.value;
   }
   if (els.wizardPlayabilitySelect && els.playabilitySelect) {
     els.playabilitySelect.value = els.wizardPlayabilitySelect.value;
@@ -7436,12 +7601,473 @@ function buildPianoCoverTracks(samples, sampleRate, duration, tempoEstimate, opt
   });
 }
 
+function currentAudioFile() {
+  return (els.audioWizardFileInput && els.audioWizardFileInput.files && els.audioWizardFileInput.files[0]) ||
+    (els.audioFileInput.files && els.audioFileInput.files[0]) ||
+    null;
+}
+
+function clampNumber(value, min, max, fallback) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.max(min, Math.min(max, number));
+}
+
+function readAudioCandidateFromControls() {
+  return {
+    name: "Current sliders",
+    autoConfig: (els.autoConfigSelect ? els.autoConfigSelect.value : "manual") === "auto",
+    melodyTone: els.melodyToneSelect ? els.melodyToneSelect.value : "balanced",
+    density: els.feelDensitySelect ? els.feelDensitySelect.value : "balanced",
+    playability: els.playabilitySelect ? els.playabilitySelect.value : "human",
+    enhancerMode: els.enhancerSelect ? els.enhancerSelect.value : "threePhase",
+    windowSeconds: clampNumber(els.analysisWindowSelect ? els.analysisWindowSelect.value : 1, 0.5, 2.5, 1),
+    minimumSeconds: clampNumber(els.minChordSelect ? els.minChordSelect.value : 2, 1, 4, 2),
+    chordThreshold: clampNumber(els.chordSensitivityInput ? els.chordSensitivityInput.value : 0.62, 0.5, 0.9, 0.62),
+    melodyThreshold: clampNumber(els.melodySensitivityInput ? els.melodySensitivityInput.value : 0.15, 0.06, 0.32, 0.15),
+    autoKey: Boolean(els.wizardAutoKeyInput && els.wizardAutoKeyInput.checked),
+    autoBpm: Boolean(els.wizardAutoBpmInput && els.wizardAutoBpmInput.checked),
+    baseKeyId: state.keyId,
+    baseBpm: state.bpm
+  };
+}
+
+function melodyToneSettings(tone) {
+  if (tone === "vocal") {
+    return {
+      label: "voice lead",
+      melodyThresholdDelta: -0.025,
+      settings: {
+        translatorLeadSensitivity: 0.15,
+        neuralSensitivity: 0.3,
+        translatorMaxFrameNotes: 5
+      }
+    };
+  }
+  if (tone === "bright-piano") {
+    return {
+      label: "bright piano lead",
+      melodyThresholdDelta: 0.005,
+      settings: {
+        translatorLeadSensitivity: 0.16,
+        neuralSensitivity: 0.32,
+        pianoHopLength: 560,
+        translatorMaxFrameNotes: 7
+      }
+    };
+  }
+  if (tone === "soft-piano") {
+    return {
+      label: "soft piano lead",
+      melodyThresholdDelta: -0.01,
+      settings: {
+        translatorLeadSensitivity: 0.22,
+        neuralSensitivity: 0.36,
+        translatorMaxFrameNotes: 5
+      }
+    };
+  }
+  return {
+    label: "balanced lead",
+    melodyThresholdDelta: 0,
+    settings: {}
+  };
+}
+
+function applyAudioCandidateControls(candidate) {
+  if (els.melodySensitivityInput) els.melodySensitivityInput.value = String(candidate.melodyThreshold);
+  if (els.chordSensitivityInput) els.chordSensitivityInput.value = String(candidate.chordThreshold);
+  if (els.analysisWindowSelect) els.analysisWindowSelect.value = String(candidate.windowSeconds);
+  if (els.minChordSelect) els.minChordSelect.value = String(candidate.minimumSeconds);
+  if (els.feelDensitySelect) els.feelDensitySelect.value = candidate.density;
+  if (els.playabilitySelect) els.playabilitySelect.value = candidate.playability;
+  if (els.enhancerSelect) els.enhancerSelect.value = candidate.enhancerMode;
+  if (els.melodyToneSelect) els.melodyToneSelect.value = candidate.melodyTone;
+  if (els.autoConfigSelect) els.autoConfigSelect.value = candidate.autoConfig ? "auto" : "manual";
+  if (els.wizardMelodySensitivityInput) els.wizardMelodySensitivityInput.value = String(candidate.melodyThreshold);
+  if (els.wizardChordSensitivityInput) els.wizardChordSensitivityInput.value = String(candidate.chordThreshold);
+  if (els.wizardFeelDensitySelect) els.wizardFeelDensitySelect.value = candidate.density;
+  if (els.wizardPlayabilitySelect) els.wizardPlayabilitySelect.value = candidate.playability;
+  if (els.wizardEnhancerSelect) els.wizardEnhancerSelect.value = candidate.enhancerMode;
+  if (els.wizardMelodyToneSelect) els.wizardMelodyToneSelect.value = candidate.melodyTone;
+  if (els.wizardAutoConfigSelect) els.wizardAutoConfigSelect.value = candidate.autoConfig ? "auto" : "manual";
+}
+
+async function prepareAudioAnalysisSource(file) {
+  const ctx = getAudioContext();
+  const buffer = await ctx.decodeAudioData(await file.arrayBuffer());
+  const targetRate = Math.min(11025, buffer.sampleRate);
+  const mono = downmixAudioBuffer(buffer);
+  const samples = resampleLinear(mono, buffer.sampleRate, targetRate);
+  const melodySamples = preEmphasize(resampleLinear(mono, buffer.sampleRate, MELODY_TARGET_RATE));
+  const rhythmRate = Math.min(RHYTHM_TARGET_RATE, buffer.sampleRate);
+  const rhythmSamples = preEmphasize(resampleLinear(mono, buffer.sampleRate, rhythmRate));
+  return {
+    file,
+    buffer,
+    targetRate,
+    samples,
+    melodySamples,
+    rhythmRate,
+    rhythmSamples,
+    tempoEstimate: estimateTempo(samples, targetRate)
+  };
+}
+
+function clonePlain(value) {
+  if (typeof structuredClone === "function") return structuredClone(value);
+  return JSON.parse(JSON.stringify(value));
+}
+
+function melodyContinuityScore(notes) {
+  if (!notes || notes.length < 3) return 0.5;
+  let smooth = 0;
+  let count = 0;
+  for (let index = 1; index < notes.length; index += 1) {
+    const jump = Math.abs((notes[index].midi || notes[index].rawMidi || 0) - (notes[index - 1].midi || notes[index - 1].rawMidi || 0));
+    smooth += Math.max(0, 1 - jump / 18);
+    count += 1;
+  }
+  return smooth / Math.max(1, count);
+}
+
+function playabilityFitScore(events, playability) {
+  const noteEvents = (events || []).filter((event) => event.type === "note");
+  if (!noteEvents.length) return 0;
+  const settings = playabilitySettings(playability);
+  const overLimit = noteEvents.filter((event) => (event.notes || []).length > settings.maxSimultaneous).length;
+  const averageKeys = mean(noteEvents.map((event) => (event.notes || []).length));
+  const targetAverage = Math.max(1, Math.min(settings.maxSimultaneous, settings.maxSimultaneous - 0.4));
+  const averageFit = Math.max(0, 1 - Math.abs(averageKeys - targetAverage) / Math.max(1, settings.maxSimultaneous));
+  return Math.max(0, averageFit - overLimit / Math.max(1, noteEvents.length));
+}
+
+function scoreAutoConfigCandidate(analysis, candidate) {
+  const quality = analysis.quality || { score: 0, chromaSimilarity: 0, timingSimilarity: 0, noteCoverage: 0 };
+  const continuity = melodyContinuityScore(analysis.melodyNotes || []);
+  const playabilityFit = playabilityFitScore(analysis.combinedEvents || [], candidate.playability);
+  const enoughMelody = Math.min(1, (analysis.melodyNotes || []).length / Math.max(12, (analysis.duration || 1) / 2.8));
+  return Math.max(0, Math.min(1,
+    quality.score * 0.68 +
+    continuity * 0.13 +
+    playabilityFit * 0.11 +
+    enoughMelody * 0.08
+  ));
+}
+
+function candidateKey(candidate) {
+  return [
+    candidate.melodyTone,
+    candidate.density,
+    candidate.playability,
+    candidate.enhancerMode,
+    candidate.windowSeconds,
+    candidate.minimumSeconds,
+    candidate.chordThreshold.toFixed(2),
+    candidate.melodyThreshold.toFixed(2)
+  ].join("|");
+}
+
+function makeCandidate(base, overrides) {
+  return {
+    ...base,
+    ...overrides,
+    autoConfig: true,
+    chordThreshold: clampNumber(overrides.chordThreshold ?? base.chordThreshold, 0.52, 0.86, base.chordThreshold),
+    melodyThreshold: clampNumber(overrides.melodyThreshold ?? base.melodyThreshold, 0.08, 0.28, base.melodyThreshold)
+  };
+}
+
+function buildAutoConfigCandidates(base) {
+  const tone = base.melodyTone || "balanced";
+  const presets = [
+    { name: "current sliders" },
+    { name: "lead clean", melodyThreshold: 0.11, chordThreshold: 0.58, density: "sparse", playability: "human", enhancerMode: "threePhase", windowSeconds: 1, minimumSeconds: 2 },
+    { name: "balanced song feel", melodyThreshold: 0.14, chordThreshold: 0.62, density: "balanced", playability: "human", enhancerMode: "threePhase", windowSeconds: 1, minimumSeconds: 2 },
+    { name: "full harmony", melodyThreshold: 0.16, chordThreshold: 0.56, density: "full", playability: "balanced", enhancerMode: "threePhase", windowSeconds: 1.5, minimumSeconds: 2 },
+    { name: "fast melody", melodyThreshold: 0.1, chordThreshold: 0.66, density: "balanced", playability: "simple", enhancerMode: "gentle", windowSeconds: 0.75, minimumSeconds: 1 },
+    { name: "dense cover", melodyThreshold: 0.18, chordThreshold: 0.54, density: "full", playability: "rich", enhancerMode: "threePhase", windowSeconds: 1, minimumSeconds: 1 },
+    { name: "stable chord map", melodyThreshold: 0.13, chordThreshold: 0.7, density: "balanced", playability: "human", enhancerMode: "threePhase", windowSeconds: 1.5, minimumSeconds: 3 },
+    { name: "soft lead recovery", melodyThreshold: 0.09, chordThreshold: 0.6, density: "balanced", playability: "human", enhancerMode: "gentle", windowSeconds: 1, minimumSeconds: 2 }
+  ];
+
+  if (tone === "vocal") {
+    presets.push(
+      { name: "vocal foreground", melodyThreshold: 0.09, chordThreshold: 0.64, density: "sparse", playability: "simple", enhancerMode: "gentle", windowSeconds: 1, minimumSeconds: 2 },
+      { name: "vocal plus pulse", melodyThreshold: 0.12, chordThreshold: 0.58, density: "balanced", playability: "human", enhancerMode: "threePhase", windowSeconds: 1, minimumSeconds: 2 }
+    );
+  }
+
+  if (tone.includes("piano")) {
+    presets.push(
+      { name: "piano lead bright", melodyThreshold: 0.15, chordThreshold: 0.56, density: "balanced", playability: "balanced", enhancerMode: "threePhase", windowSeconds: 1, minimumSeconds: 2 },
+      { name: "piano cover rich", melodyThreshold: 0.2, chordThreshold: 0.54, density: "full", playability: "rich", enhancerMode: "threePhase", windowSeconds: 0.75, minimumSeconds: 1 }
+    );
+  }
+
+  const seen = new Set();
+  return presets
+    .map((preset) => makeCandidate(base, { ...preset, melodyTone: tone }))
+    .filter((candidate) => {
+      const key = candidateKey(candidate);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function buildRefinedAutoCandidates(bestCandidate, base) {
+  const candidates = [];
+  [-0.02, 0.02].forEach((melodyOffset) => {
+    candidates.push(makeCandidate(base, {
+      ...bestCandidate,
+      name: `${bestCandidate.name} melody ${melodyOffset > 0 ? "+" : ""}${melodyOffset}`,
+      melodyThreshold: bestCandidate.melodyThreshold + melodyOffset
+    }));
+  });
+  [-0.04, 0.04].forEach((chordOffset) => {
+    candidates.push(makeCandidate(base, {
+      ...bestCandidate,
+      name: `${bestCandidate.name} chord ${chordOffset > 0 ? "+" : ""}${chordOffset}`,
+      chordThreshold: bestCandidate.chordThreshold + chordOffset
+    }));
+  });
+  ["sparse", "balanced", "full"].forEach((density) => {
+    if (density !== bestCandidate.density) {
+      candidates.push(makeCandidate(base, {
+        ...bestCandidate,
+        name: `${bestCandidate.name} ${density}`,
+        density
+      }));
+    }
+  });
+  ["simple", "human", "balanced", "rich"].forEach((playability) => {
+    if (playability !== bestCandidate.playability) {
+      candidates.push(makeCandidate(base, {
+        ...bestCandidate,
+        name: `${bestCandidate.name} ${playability}`,
+        playability
+      }));
+    }
+  });
+  return candidates;
+}
+
+async function runAudioAnalysisCandidate(prepared, candidate, options = {}) {
+  applyAudioCandidateControls(candidate);
+  state.keyId = candidate.baseKeyId || state.keyId;
+  state.bpm = candidate.baseBpm || state.bpm;
+
+  const profile = "translator";
+  if (els.analysisProfileSelect) els.analysisProfileSelect.value = profile;
+  const tone = melodyToneSettings(candidate.melodyTone);
+  const settings = {
+    ...analysisProfileSettings(),
+    ...tone.settings
+  };
+  const statusPrefix = options.statusPrefix || settings.label;
+  const buffer = prepared.buffer;
+  const frameLength = Math.min(4096, Math.max(2048, Math.floor(prepared.targetRate * Math.min(0.5, candidate.windowSeconds))));
+  const kernel = buildAnalysisKernel(prepared.targetRate, frameLength);
+  const melodyThreshold = clampNumber(candidate.melodyThreshold + tone.melodyThresholdDelta, 0.08, 0.28, candidate.melodyThreshold);
+
+  const analysis = await buildChordFrames(prepared.samples, buffer.duration, kernel, candidate.windowSeconds, candidate.chordThreshold, (done, total) => {
+    setAudioStatus(`${statusPrefix}: analyzing chords ${Math.round((done / total) * 100)}%`);
+  }, {
+    batchSize: settings.chordBatchSize,
+    probeRatios: settings.chordProbeRatios
+  });
+
+  const melody = await buildMelodyNotes(prepared.melodySamples, buffer.duration, MELODY_TARGET_RATE, melodyThreshold, (done, total) => {
+    setAudioStatus(`${statusPrefix}: tracking ${tone.label} ${Math.round((done / total) * 100)}%`);
+  }, {
+    hopLength: settings.melodyHopLength,
+    batchSize: settings.melodyBatchSize
+  });
+
+  const rhythm = await buildRhythmTrack(prepared.rhythmSamples, prepared.rhythmRate, prepared.tempoEstimate, candidate.density, {
+    frameLength: RHYTHM_FRAME_LENGTH,
+    hopLength: settings.rhythmHopLength,
+    batchSize: settings.rhythmBatchSize
+  }, (done, total) => {
+    setAudioStatus(`${statusPrefix}: extracting rhythm ${Math.round((done / total) * 100)}%`);
+  });
+
+  const pianoTracks = await buildPianoCoverTracks(prepared.samples, prepared.targetRate, buffer.duration, prepared.tempoEstimate, {
+    ...settings,
+    windowSeconds: candidate.windowSeconds,
+    density: candidate.density
+  }, (done, total) => {
+    setAudioStatus(`${statusPrefix}: caching song frequencies ${Math.round((done / total) * 100)}%`);
+  });
+
+  const smoothed = smoothChordFrames(analysis.frames);
+  const chromaMerged = enforceMinimumChordDuration(mergeFrames(smoothed), candidate.minimumSeconds);
+  const merged = fuseAudioChordSegments(chromaMerged, pianoTracks.translatorChordFrames, candidate.minimumSeconds, buffer.duration);
+  const translatorLead = mergeMelodySources(melody.notes, pianoTracks.translatorMelodyNotes || [], buffer.duration, prepared.tempoEstimate);
+  const baseMelody = mergeMelodySources(translatorLead, pianoTracks.foregroundNotes, buffer.duration, prepared.tempoEstimate);
+  const foregroundNotes = markRecurringThemes(mergeNearDuplicateNotes([
+    ...(pianoTracks.translatorMelodyNotes || []),
+    ...pianoTracks.foregroundNotes,
+    ...(pianoTracks.neuralForegroundNotes || []).filter((note) => note.source && note.source.includes("theme"))
+  ]));
+  const translatedRhythmHits = mergeRhythmSources(rhythm.hits, pianoTracks.translatorRhythmHits || [], prepared.tempoEstimate);
+  const baseBackgroundNotes = markRecurringThemes(mergeNearDuplicateNotes([
+    ...(pianoTracks.translatorBackgroundNotes || []),
+    ...pianoTracks.backgroundNotes
+  ]));
+  const backgroundMerge = mergeBackgroundSources(baseBackgroundNotes, [], buffer.duration, prepared.tempoEstimate, false);
+  const translatorChroma = pianoTracks.songCacheSummary && pianoTracks.songCacheSummary.globalChroma
+    ? pianoTracks.songCacheSummary.globalChroma
+    : Array(12).fill(0);
+  const combinedChroma = addChroma(addChroma(analysis.globalChroma, translatorChroma, 1.15), melodyChromaFromNotes(baseMelody), 1.4);
+  const recoveryAllNotes = markRecurringThemes(mergeNearDuplicateNotes([
+    ...(pianoTracks.translatorMelodyNotes || []),
+    ...(pianoTracks.translatorBackgroundNotes || []),
+    ...(pianoTracks.neuralNotes || [])
+  ]));
+  const inputSignature = buildInputFeatureSignature(combinedChroma, rhythm.envelope, recoveryAllNotes, buffer.duration);
+  const keyGuess = estimateMajorKey(combinedChroma);
+  if (candidate.autoKey && keyGuess) state.keyId = keyGuess.keyId;
+  if (candidate.autoBpm && prepared.tempoEstimate) state.bpm = Math.min(240, Math.max(30, prepared.tempoEstimate.bpm));
+
+  state.chordAnalysis = {
+    fileName: prepared.file.name,
+    duration: buffer.duration,
+    keyGuess,
+    segments: merged,
+    refinedText: "",
+    melodyNotes: baseMelody,
+    foregroundNotes,
+    backgroundNotes: backgroundMerge.notes,
+    neuralNotes: recoveryAllNotes,
+    rhythmHits: translatedRhythmHits,
+    combinedEvents: [],
+    tempoEstimate: prepared.tempoEstimate,
+    tuning: null,
+    analysisProfile: profile,
+    feelDensity: candidate.density,
+    playability: candidate.playability,
+    enhancerMode: candidate.enhancerMode,
+    enhancementSummary: null,
+    quality: null,
+    correctionSummary: null,
+    inputSignature,
+    wordingAssignments: [],
+    autoConfig: options.autoConfig ? { candidate: { ...candidate }, tone: tone.label } : null
+  };
+  applyAudioSelfCorrection(state.chordAnalysis, {
+    allNotes: recoveryAllNotes,
+    foregroundNotes: pianoTracks.translatorMelodyNotes || [],
+    backgroundNotes: pianoTracks.translatorBackgroundNotes || []
+  }, inputSignature, settings, candidate.density);
+
+  const score = scoreAutoConfigCandidate(state.chordAnalysis, candidate);
+  state.chordAnalysis.autoConfig = options.autoConfig ? {
+    candidate: { ...candidate },
+    tone: tone.label,
+    familiarityScore: score
+  } : null;
+  return {
+    analysis: clonePlain(state.chordAnalysis),
+    score,
+    candidate: { ...candidate },
+    keyId: state.keyId,
+    bpm: state.bpm,
+    cacheFrameCount: pianoTracks.songCacheSummary ? pianoTracks.songCacheSummary.frameCount : 0,
+    sourceMelodyCount: melody.notes.length,
+    translatorMelodyCount: (pianoTracks.translatorMelodyNotes || []).length
+  };
+}
+
+async function runAutoConfigAnalysis(prepared, baseCandidate) {
+  const startedAt = performance.now();
+  const queue = buildAutoConfigCandidates(baseCandidate);
+  const seen = new Set(queue.map(candidateKey));
+  let best = null;
+  let refined = false;
+  let index = 0;
+
+  while (index < queue.length && performance.now() - startedAt < AUTO_CONFIG_MAX_MS) {
+    const candidate = queue[index];
+    index += 1;
+    const elapsed = Math.round((performance.now() - startedAt) / 1000);
+    const totalHint = refined ? queue.length : `${queue.length}+`;
+    const prefix = `Auto config ${index}/${totalHint} (${candidate.name}, ${elapsed}s)`;
+    const result = await runAudioAnalysisCandidate(prepared, candidate, {
+      autoConfig: true,
+      statusPrefix: prefix
+    });
+    setAudioStatus(`${prefix}: familiarity ${Math.round(result.score * 100)}%`);
+
+    if (!best || result.score > best.score) {
+      best = result;
+    }
+
+    if (!refined && (index >= queue.length || result.score >= 0.72)) {
+      refined = true;
+      buildRefinedAutoCandidates(best.candidate, baseCandidate).forEach((next) => {
+        const key = candidateKey(next);
+        if (seen.has(key)) return;
+        seen.add(key);
+        queue.push(next);
+      });
+    }
+
+    if (best && best.score >= AUTO_CONFIG_TARGET_SCORE && index >= 8) break;
+  }
+
+  if (!best) throw new Error("Auto config did not produce a sheet");
+  applyAudioCandidateControls(best.candidate);
+  state.keyId = best.keyId;
+  state.bpm = best.bpm;
+  state.chordAnalysis = clonePlain(best.analysis);
+  state.chordAnalysis.autoConfig = {
+    ...(state.chordAnalysis.autoConfig || {}),
+    tried: index,
+    elapsedSeconds: Math.round((performance.now() - startedAt) / 1000),
+    bestScore: best.score
+  };
+  return best;
+}
+
+function audioAnalysisStatusText(result, autoApplied) {
+  const analysis = state.chordAnalysis;
+  const tempoText = analysis.tempoEstimate ? `, ${analysis.tempoEstimate.bpm} BPM` : "";
+  const flow = analysis.enhancementSummary;
+  const flowText = flow && flow.label !== "Off" ? `, ${flow.label} timing` : "";
+  const qualityText = analysis.quality ? `, match ${Math.round(analysis.quality.score * 100)}%` : "";
+  const familiarityText = analysis.autoConfig && analysis.autoConfig.bestScore
+    ? `, auto familiarity ${Math.round(analysis.autoConfig.bestScore * 100)}%`
+    : "";
+  const correction = analysis.correctionSummary;
+  const recovered = correction ? correction.melodyAdded + correction.backgroundAdded + correction.rhythmAdded : 0;
+  const cacheText = result && result.cacheFrameCount ? `, ${result.cacheFrameCount} cached frames` : "";
+  const fallbackText = result && result.translatorMelodyCount > result.sourceMelodyCount ? ", song-lead translation" : "";
+  const playabilityText = `, ${playabilitySettings(analysis.playability).label}`;
+  const autoText = autoApplied.length ? `, ${autoApplied.join(", ")}` : "";
+  const searchText = analysis.autoConfig && analysis.autoConfig.tried
+    ? `, ${analysis.autoConfig.tried} auto configs`
+    : "";
+  return `${analysis.fileName} analyzed: ${analysis.melodyNotes.length} melody notes, ${analysis.backgroundNotes.length} accompaniment notes, ${analysis.rhythmHits.length} rhythm hits, ${analysis.segments.length} chord segments${tempoText}${flowText}${playabilityText}${qualityText}${familiarityText}${recovered ? `, ${recovered} self-corrections` : ""}${cacheText}${fallbackText}${searchText}${autoText}`;
+}
+
 async function analyzeAudioFile() {
-  const file = (els.audioWizardFileInput && els.audioWizardFileInput.files && els.audioWizardFileInput.files[0]) ||
-    (els.audioFileInput.files && els.audioFileInput.files[0]);
+  const file = currentAudioFile();
   if (!file) {
     setAudioStatus("Choose an MP3 file");
     return;
+  }
+
+  syncAudioWizardControls();
+  const baseCandidate = readAudioCandidateFromControls();
+  if (baseCandidate.autoConfig) {
+    const ok = window.confirm("Auto config will retry melody, chord, feel, playability, and timing slider values to maximize song familiarity. This can take up to 5 minutes before the result is ready. Continue?");
+    if (!ok) {
+      if (state.converterMode === "audio") setAudioWizardStep("feel");
+      setAudioStatus("Auto config cancelled");
+      return;
+    }
   }
 
   els.analyzeAudioBtn.disabled = true;
@@ -7453,137 +8079,17 @@ async function analyzeAudioFile() {
   setAudioStatus("Decoding audio");
 
   try {
-    const profile = "translator";
-    if (els.analysisProfileSelect) els.analysisProfileSelect.value = profile;
-    const density = els.feelDensitySelect.value || "balanced";
-    const playability = els.playabilitySelect ? els.playabilitySelect.value : "human";
-    const settings = analysisProfileSettings();
-    const ctx = getAudioContext();
-    const buffer = await ctx.decodeAudioData(await file.arrayBuffer());
-    const targetRate = Math.min(11025, buffer.sampleRate);
-    const mono = downmixAudioBuffer(buffer);
-    const samples = resampleLinear(mono, buffer.sampleRate, targetRate);
-    const melodySamples = preEmphasize(resampleLinear(mono, buffer.sampleRate, MELODY_TARGET_RATE));
-    const rhythmSamples = preEmphasize(resampleLinear(mono, buffer.sampleRate, Math.min(RHYTHM_TARGET_RATE, buffer.sampleRate)));
-    const rhythmRate = Math.min(RHYTHM_TARGET_RATE, buffer.sampleRate);
-    const tempoEstimate = estimateTempo(samples, targetRate);
-    const windowSeconds = Number(els.analysisWindowSelect.value) || 1;
-    const minimumSeconds = Number(els.minChordSelect.value) || 2;
-    const threshold = Number(els.chordSensitivityInput.value) || 0.62;
-    const melodyThreshold = Number(els.melodySensitivityInput.value) || 0.15;
-    const frameLength = Math.min(4096, Math.max(2048, Math.floor(targetRate * Math.min(0.5, windowSeconds))));
-    const kernel = buildAnalysisKernel(targetRate, frameLength);
-
-    const analysis = await buildChordFrames(samples, buffer.duration, kernel, windowSeconds, threshold, (done, total) => {
-      setAudioStatus(`${settings.label}: analyzing chords ${Math.round((done / total) * 100)}%`);
-    }, {
-      batchSize: settings.chordBatchSize,
-      probeRatios: settings.chordProbeRatios
-    });
-
-    const melody = await buildMelodyNotes(melodySamples, buffer.duration, MELODY_TARGET_RATE, melodyThreshold, (done, total) => {
-      setAudioStatus(`${settings.label}: tracking melody ${Math.round((done / total) * 100)}%`);
-    }, {
-      hopLength: settings.melodyHopLength,
-      batchSize: settings.melodyBatchSize
-    });
-
-    const rhythm = await buildRhythmTrack(rhythmSamples, rhythmRate, tempoEstimate, density, {
-      frameLength: RHYTHM_FRAME_LENGTH,
-      hopLength: settings.rhythmHopLength,
-      batchSize: settings.rhythmBatchSize
-    }, (done, total) => {
-      setAudioStatus(`${settings.label}: extracting rhythm ${Math.round((done / total) * 100)}%`);
-    });
-
-    const pianoTracks = await buildPianoCoverTracks(samples, targetRate, buffer.duration, tempoEstimate, {
-      ...settings,
-      windowSeconds,
-      density
-    }, (done, total) => {
-      setAudioStatus(`${settings.label}: caching song frequencies ${Math.round((done / total) * 100)}%`);
-    });
-
-    const smoothed = smoothChordFrames(analysis.frames);
-    const chromaMerged = enforceMinimumChordDuration(mergeFrames(smoothed), minimumSeconds);
-    let merged = fuseAudioChordSegments(chromaMerged, pianoTracks.translatorChordFrames, minimumSeconds, buffer.duration);
-    const translatorLead = mergeMelodySources(melody.notes, pianoTracks.translatorMelodyNotes || [], buffer.duration, tempoEstimate);
-    const baseMelody = mergeMelodySources(translatorLead, pianoTracks.foregroundNotes, buffer.duration, tempoEstimate);
-    const neuralMelody = { notes: baseMelody, added: 0 };
-    const mergedMelody = neuralMelody.notes;
-    const foregroundNotes = markRecurringThemes(mergeNearDuplicateNotes([
-      ...(pianoTracks.translatorMelodyNotes || []),
-      ...pianoTracks.foregroundNotes,
-      ...(pianoTracks.neuralForegroundNotes || []).filter((note) => note.source && note.source.includes("theme"))
-    ]));
-    const translatedRhythmHits = mergeRhythmSources(rhythm.hits, pianoTracks.translatorRhythmHits || [], tempoEstimate);
-    const baseBackgroundNotes = markRecurringThemes(mergeNearDuplicateNotes([
-      ...(pianoTracks.translatorBackgroundNotes || []),
-      ...pianoTracks.backgroundNotes
-    ]));
-    const backgroundMerge = mergeBackgroundSources(
-      baseBackgroundNotes,
-      [],
-      buffer.duration,
-      tempoEstimate,
-      false
-    );
-    const translatorChroma = pianoTracks.songCacheSummary && pianoTracks.songCacheSummary.globalChroma
-      ? pianoTracks.songCacheSummary.globalChroma
-      : Array(12).fill(0);
-    const combinedChroma = addChroma(addChroma(analysis.globalChroma, translatorChroma, 1.15), melodyChromaFromNotes(mergedMelody), 1.4);
-    const recoveryAllNotes = markRecurringThemes(mergeNearDuplicateNotes([
-      ...(pianoTracks.translatorMelodyNotes || []),
-      ...(pianoTracks.translatorBackgroundNotes || []),
-      ...(pianoTracks.neuralNotes || [])
-    ]));
-    const inputSignature = buildInputFeatureSignature(combinedChroma, rhythm.envelope, recoveryAllNotes, buffer.duration);
-    state.chordAnalysis = {
-      fileName: file.name,
-      duration: buffer.duration,
-      keyGuess: estimateMajorKey(combinedChroma),
-      segments: merged,
-      refinedText: "",
-      melodyNotes: mergedMelody,
-      foregroundNotes,
-      backgroundNotes: backgroundMerge.notes,
-      neuralNotes: recoveryAllNotes,
-      rhythmHits: translatedRhythmHits,
-      combinedEvents: [],
-      tempoEstimate,
-      tuning: null,
-      analysisProfile: profile,
-      feelDensity: density,
-      playability,
-      enhancerMode: els.enhancerSelect.value || "threePhase",
-      enhancementSummary: null,
-      quality: null,
-      correctionSummary: null,
-      inputSignature,
-      wordingAssignments: []
-    };
-    applyAudioSelfCorrection(state.chordAnalysis, {
-      allNotes: recoveryAllNotes,
-      foregroundNotes: pianoTracks.translatorMelodyNotes || [],
-      backgroundNotes: pianoTracks.translatorBackgroundNotes || []
-    }, inputSignature, settings, density);
+    const prepared = await prepareAudioAnalysisSource(file);
+    const result = baseCandidate.autoConfig
+      ? await runAutoConfigAnalysis(prepared, baseCandidate)
+      : await runAudioAnalysisCandidate(prepared, baseCandidate, { statusPrefix: "Song translator" });
     const autoApplied = state.converterMode === "audio" ? applyAudioWizardAutoSettings() : [];
     if (autoApplied.length) {
       renderAll();
     } else {
       renderChordAnalysis();
     }
-    const tempoText = tempoEstimate ? `, ${tempoEstimate.bpm} BPM` : "";
-    const flow = state.chordAnalysis.enhancementSummary;
-    const flowText = flow && flow.label !== "Off" ? `, ${flow.label} timing` : "";
-    const qualityText = state.chordAnalysis.quality ? `, match ${Math.round(state.chordAnalysis.quality.score * 100)}%` : "";
-    const correction = state.chordAnalysis.correctionSummary;
-    const recovered = correction ? correction.melodyAdded + correction.backgroundAdded + correction.rhythmAdded : 0;
-    const cacheText = pianoTracks.songCacheSummary ? `, ${pianoTracks.songCacheSummary.frameCount} cached frames` : "";
-    const fallbackText = (pianoTracks.translatorMelodyNotes || []).length > melody.notes.length ? ", song-lead translation" : "";
-    const playabilityText = `, ${playabilitySettings(playability).label}`;
-    const autoText = autoApplied.length ? `, ${autoApplied.join(", ")}` : "";
-    setAudioStatus(`${file.name} analyzed: ${state.chordAnalysis.melodyNotes.length} melody notes, ${state.chordAnalysis.backgroundNotes.length} accompaniment notes, ${state.chordAnalysis.rhythmHits.length} rhythm hits, ${state.chordAnalysis.segments.length} chord segments${tempoText}${flowText}${playabilityText}${qualityText}${recovered ? `, ${recovered} self-corrections` : ""}${cacheText}${fallbackText}${autoText}`);
+    setAudioStatus(audioAnalysisStatusText(result, autoApplied));
     if (state.converterMode === "audio") setAudioWizardStep("done");
   } catch (error) {
     state.chordAnalysis = {
@@ -8486,6 +8992,8 @@ function syncControls() {
   if (els.wizardMelodySensitivityInput && els.melodySensitivityInput) els.wizardMelodySensitivityInput.value = els.melodySensitivityInput.value;
   if (els.wizardChordSensitivityInput && els.chordSensitivityInput) els.wizardChordSensitivityInput.value = els.chordSensitivityInput.value;
   if (els.wizardFeelDensitySelect && els.feelDensitySelect) els.wizardFeelDensitySelect.value = els.feelDensitySelect.value;
+  if (els.wizardAutoConfigSelect && els.autoConfigSelect) els.wizardAutoConfigSelect.value = els.autoConfigSelect.value;
+  if (els.wizardMelodyToneSelect && els.melodyToneSelect) els.wizardMelodyToneSelect.value = els.melodyToneSelect.value;
   if (els.wizardPlayabilitySelect && els.playabilitySelect) els.wizardPlayabilitySelect.value = els.playabilitySelect.value;
   if (els.wizardBpmInput) els.wizardBpmInput.value = String(state.bpm);
   if (els.wizardBpmInput && els.wizardAutoBpmInput) els.wizardBpmInput.disabled = els.wizardAutoBpmInput.checked;
@@ -8589,6 +9097,8 @@ function bindEvents() {
     els.wizardMelodySensitivityInput,
     els.wizardChordSensitivityInput,
     els.wizardFeelDensitySelect,
+    els.wizardAutoConfigSelect,
+    els.wizardMelodyToneSelect,
     els.wizardPlayabilitySelect,
     els.wizardBpmInput,
     els.wizardAutoBpmInput,
@@ -8729,6 +9239,16 @@ function bindEvents() {
       setAudioStatus(`Combined feel rebuilt in ${feelDensitySettings(els.feelDensitySelect.value).label} mode`);
     }
   });
+  if (els.autoConfigSelect && els.wizardAutoConfigSelect) {
+    els.autoConfigSelect.addEventListener("change", () => {
+      els.wizardAutoConfigSelect.value = els.autoConfigSelect.value;
+    });
+  }
+  if (els.melodyToneSelect && els.wizardMelodyToneSelect) {
+    els.melodyToneSelect.addEventListener("change", () => {
+      els.wizardMelodyToneSelect.value = els.melodyToneSelect.value;
+    });
+  }
   els.playabilitySelect.addEventListener("change", () => {
     state.chordAnalysis.playability = els.playabilitySelect.value;
     if (state.chordAnalysis.melodyNotes.length || state.chordAnalysis.rhythmHits.length) {
@@ -8794,6 +9314,7 @@ function init() {
   setAudioResultTab("sheets");
   bindEvents();
   renderAll();
+  handleInitialMarketplaceLink();
   loadAuthUser();
 }
 

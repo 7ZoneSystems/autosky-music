@@ -293,6 +293,22 @@
                 </select>
               </label>
               <label>
+                <span>Configuration</span>
+                <select id="wizardAutoConfigSelect">
+                  <option value="manual" selected>Manual sliders</option>
+                  <option value="auto">Auto config, up to 5 min</option>
+                </select>
+              </label>
+              <label>
+                <span>Melody tone</span>
+                <select id="wizardMelodyToneSelect">
+                  <option value="balanced" selected>Balanced lead</option>
+                  <option value="vocal">Voice / hummed tune</option>
+                  <option value="bright-piano">Bright piano melody</option>
+                  <option value="soft-piano">Soft piano melody</option>
+                </select>
+              </label>
+              <label>
                 <span>Playability</span>
                 <select id="wizardPlayabilitySelect">
                   <option value="simple">Simple 1-key</option>
@@ -398,6 +414,22 @@
               <input id="melodySensitivityInput" type="range" min="0.08" max="0.28" step="0.01" value="0.15">
             </label>
             <label>
+              <span>Configuration</span>
+              <select id="autoConfigSelect">
+                <option value="manual" selected>Manual sliders</option>
+                <option value="auto">Auto config, up to 5 min</option>
+              </select>
+            </label>
+            <label>
+              <span>Melody tone</span>
+              <select id="melodyToneSelect">
+                <option value="balanced" selected>Balanced lead</option>
+                <option value="vocal">Voice / hummed tune</option>
+                <option value="bright-piano">Bright piano melody</option>
+                <option value="soft-piano">Soft piano melody</option>
+              </select>
+            </label>
+            <label>
               <span>Engine</span>
               <select id="analysisProfileSelect">
                 <option value="translator" selected>Song translator</option>
@@ -464,6 +496,10 @@
             <div>
               <span class="eyebrow">Input/output match</span>
               <strong id="matchScoreText">-</strong>
+            </div>
+            <div>
+              <span class="eyebrow">Auto config</span>
+              <strong id="autoConfigText">Manual</strong>
             </div>
             <div>
               <span class="eyebrow">Self corrections</span>

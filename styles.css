@@ -992,6 +992,16 @@ body:not(.view-audio) .audio-wizard-panel,
   padding: 14px;
 }
 
+.marketplace-card.focused {
+  border-color: rgba(115, 167, 255, 0.7);
+  box-shadow: 0 0 0 1px rgba(115, 167, 255, 0.28), 0 18px 42px rgba(35, 101, 255, 0.2);
+}
+
+.marketplace-card.pending-delete {
+  border-color: rgba(246, 199, 110, 0.36);
+  background: rgba(246, 199, 110, 0.075);
+}
+
 .marketplace-creator {
   display: flex;
   align-items: center;
@@ -1044,6 +1054,13 @@ body:not(.view-audio) .audio-wizard-panel,
   margin: 0;
 }
 
+.marketplace-notice {
+  padding: 8px 10px;
+  border: 1px solid rgba(246, 199, 110, 0.24);
+  border-radius: 10px;
+  background: rgba(246, 199, 110, 0.08);
+}
+
 .marketplace-rating {
   display: grid;
   gap: 8px;
@@ -1070,6 +1087,11 @@ body:not(.view-audio) .audio-wizard-panel,
   background: rgba(246, 199, 110, 0.12);
 }
 
+.rating-stars button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
 .marketplace-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1080,6 +1102,11 @@ body:not(.view-audio) .audio-wizard-panel,
 .marketplace-actions .primary-button,
 .marketplace-actions .ghost-button {
   width: 100%;
+}
+
+.danger-button {
+  border-color: rgba(255, 105, 128, 0.34);
+  color: #ffd6de;
 }
 
 .auth-signed-in .local-export-action {
