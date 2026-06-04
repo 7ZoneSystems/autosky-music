@@ -42,6 +42,16 @@ function getTenantId() {
   ).trim();
 }
 
+function getApplicationKey() {
+  return (
+    process.env.COHESIVITY_APPLICATION_KEY ||
+    process.env.COH_APPLICATION_KEY ||
+    process.env.coh_application_key ||
+    localEnv.coh_application_key ||
+    ""
+  ).trim();
+}
+
 function getCohesivityOrigin() {
   return (process.env.COHESIVITY_ORIGIN || COHESIVITY_ORIGIN).replace(/\/+$/, "");
 }
@@ -227,6 +237,7 @@ module.exports = {
   ACCESS_COOKIE,
   REFRESH_COOKIE,
   clearAuthCookies,
+  getApplicationKey,
   getAuthUser,
   getCohesivityOrigin,
   getRequestOrigin,

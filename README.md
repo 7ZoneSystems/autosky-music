@@ -16,7 +16,7 @@ Static composing, local MP3 analysis, direct MusicXML/JSON/text score imports, a
 
 For MXL score import locally, keep `npm run dev` running because MXL unzip uses `/api/sheet-omr`. PNG/JPG/PDF score import is read by the browser's local vision pipeline.
 
-For Google login locally, the app reads `tenant_id` from `.cohesivity` or `COHESIVITY_TENANT_ID` from `.env`. Cohesivity login is already provisioned for localhost ports 5173-5175 with callback path `/api/auth/callback`.
+For Google login locally, the app reads `tenant_id` and `coh_application_key` from `.cohesivity` or `COHESIVITY_TENANT_ID` / `COHESIVITY_APPLICATION_KEY` from `.env`. Cohesivity login is already provisioned for localhost ports 5173-5175 with callback path `/api/auth/callback`.
 
 The build creates a generated `public/` directory for Vercel from the root static files. `public/` is ignored by Git.
 
@@ -32,6 +32,7 @@ Set these in Vercel Project Settings -> Environment Variables:
 - `MIMO_MODEL`: optional. Defaults to `mimo-v2.5`.
 - `COHESIVITY_TENANT_ID`: required for Google login on Vercel. Current generated tenant: `calm-salmon-dealing`.
 - `COHESIVITY_ORIGIN`: optional. Defaults to `https://cohesivity.ai`.
+- `COHESIVITY_APPLICATION_KEY`: required for signed-in cloud sheet saves. Use `coh_application_key` from `.cohesivity`; keep it server-side.
 
 ## What It Uses
 
@@ -40,6 +41,7 @@ Set these in Vercel Project Settings -> Environment Variables:
 - The active key is controlled by a selected music sheet or the current background music key.
 - This app stores the 12 Sky major-key layouts: C, C#/Db, D, D#/Eb, E, F, F#/Gb, G, G#/Ab, A, A#/Bb, and B.
 - The first screen is an animated dark piano-note landing page; `Try it out` opens the two-option Audio to Sky sheet or Piano sheet to Sky sheet chooser.
+- Signed-in users can save and retrieve sheets from their Cohesivity account database. Local users still keep the browser local save/load and timed JSON export path.
 - The audio workflow is a guided wizard: attach audio, set melody/chord sensitivity, set feel/playability/auto BPM/auto key/timing, review the selected Sky key, then open a tabbed final page with SHEETS, Details, and Timing details.
 - `Cb` is treated as the practical enharmonic alias of B major, while the F#/Gb layout includes the `Cb` scale degree used in Sky's flat-key table.
 - The app exports common Sky sheet notation: `A1` through `C5`, 1-15 button numbers, note names, JSON, and timed JSON with BPM, beat timing, second timing, key, and per-note frequencies.
@@ -83,6 +85,8 @@ The audio engine and visual score reader run locally. Xiaomi MiMo is called by `
 ## Cohesivity Login Note
 
 Google login uses Cohesivity social-login. The browser starts at `/api/auth/login`, Cohesivity redirects back to `/api/auth/callback` with tokens, and the server stores those tokens as httpOnly SameSite=Lax cookies. `/api/auth/user` verifies or refreshes the session through Cohesivity, and `/api/auth/logout` clears the local cookies and revokes the refresh token.
+
+Signed-in sheet saves use Cohesivity Database through `/api/sheets`. The app verifies the Google session server-side, stores each sheet under the authenticated Cohesivity user id, and queries the database with `COHESIVITY_APPLICATION_KEY`. The application key must never be sent to the browser.
 
 ## Sources Checked
 

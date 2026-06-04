@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "npm run build && node server.js",
-    "build": "node --check app.js && node --check api/auth-utils.js && node --check api/auth/login.js && node --check api/auth/callback.js && node --check api/auth/user.js && node --check api/auth/logout.js && node --check api/mimo-refine.js && node --check api/sheet-omr.js && node --check server.js && mkdir -p public && cp index.html styles.css app.js public/",
+    "build": "node --check app.js && node --check api/auth-utils.js && node --check api/auth/login.js && node --check api/auth/callback.js && node --check api/auth/user.js && node --check api/auth/logout.js && node --check api/sheets.js && node --check api/mimo-refine.js && node --check api/sheet-omr.js && node --check server.js && mkdir -p public && cp index.html styles.css app.js public/",
     "start": "node server.js",
     "vercel:dev": "npm run build && vercel dev"
   },

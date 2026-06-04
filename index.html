@@ -69,6 +69,19 @@
         </div>
       </section>
 
+      <section id="loginGateScreen" class="login-gate-screen" aria-labelledby="loginGateTitle">
+        <div class="login-gate-card">
+          <span class="eyebrow">Save your Sky sheets</span>
+          <h1 id="loginGateTitle">Continue with your Google account</h1>
+          <p>Cloud saves need login so your Sky sheets can be saved to your own account and retrieved later from the web.</p>
+          <div class="login-gate-actions">
+            <button id="loginGateGoogleBtn" class="primary-button" type="button">Continue with Google</button>
+            <button id="loginGateGuestBtn" class="ghost-button" type="button">Continue without login</button>
+          </div>
+          <p class="guest-warning">Your output and data will not be saved online. Consider saving manually.</p>
+        </div>
+      </section>
+
       <section id="entryScreen" class="entry-screen" aria-labelledby="entryTitle">
         <div class="entry-copy">
           <h1 id="entryTitle">Hi there creators of sky music</h1>
@@ -628,10 +641,22 @@
               <h2 id="exportTitle">Import / Export</h2>
               <p id="exportSubtitle">ABC1-5, numbers, note names, JSON, timed JSON</p>
             </div>
-            <button id="copyExportBtn" class="ghost-button" type="button">Copy export</button>
+            <button id="copyExportBtn" class="ghost-button local-export-action" type="button">Copy export</button>
           </div>
 
-          <div class="export-grid">
+          <div id="cloudSavePanel" class="cloud-save-panel" hidden>
+            <div class="cloud-save-head">
+              <div>
+                <span class="eyebrow">Cohesivity cloud</span>
+                <h3>My saved Sky sheets</h3>
+              </div>
+              <button id="refreshCloudSavesBtn" class="ghost-button" type="button">Refresh</button>
+            </div>
+            <p id="cloudSaveStatus">Sign in to save sheets online.</p>
+            <div id="cloudSaveList" class="cloud-save-list"></div>
+          </div>
+
+          <div class="export-grid local-export-action">
             <label class="export-import-field">
               <span>Paste sheet text</span>
               <textarea id="importText" spellcheck="false" placeholder="A1A3B3 . B4 B5"></textarea>
@@ -656,7 +681,7 @@
             </label>
           </div>
 
-          <div class="source-row">
+          <div class="source-row local-export-action">
             <a href="https://thatgamecompany.helpshift.com/hc/en/17-sky-children-of-the-light/faq/1345-how-do-i-use-music-sheets-in-sky/?l=en" target="_blank" rel="noreferrer">Official 15-note source</a>
             <a href="https://sky-children-of-the-light.fandom.com/wiki/Instruments" target="_blank" rel="noreferrer">Instrument layout source</a>
             <a href="https://sky-children-of-the-light.fandom.com/wiki/Music_Key" target="_blank" rel="noreferrer">Music key source</a>

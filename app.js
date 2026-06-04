@@ -273,7 +273,15 @@ const state = {
     loading: true,
     user: null,
     menuOpen: false,
-    error: null
+    error: null,
+    guestMode: false,
+    pendingToolEntry: false
+  },
+  cloud: {
+    activeSheetId: null,
+    sheets: [],
+    loading: false,
+    status: "Sign in to save sheets online."
   },
   keyId: "C",
   notation: "abc",
@@ -344,8 +352,15 @@ const els = {
   authMenu: document.querySelector("#authMenu"),
   authMenuHomeBtn: document.querySelector("#authMenuHomeBtn"),
   authLogoutBtn: document.querySelector("#authLogoutBtn"),
+  cloudSavePanel: document.querySelector("#cloudSavePanel"),
+  cloudSaveStatus: document.querySelector("#cloudSaveStatus"),
+  cloudSaveList: document.querySelector("#cloudSaveList"),
+  refreshCloudSavesBtn: document.querySelector("#refreshCloudSavesBtn"),
   landingScreen: document.querySelector("#landingScreen"),
   tryItOutBtn: document.querySelector("#tryItOutBtn"),
+  loginGateScreen: document.querySelector("#loginGateScreen"),
+  loginGateGoogleBtn: document.querySelector("#loginGateGoogleBtn"),
+  loginGateGuestBtn: document.querySelector("#loginGateGuestBtn"),
   entryScreen: document.querySelector("#entryScreen"),
   chooseAudioBtn: document.querySelector("#chooseAudioBtn"),
   chooseScoreBtn: document.querySelector("#chooseScoreBtn"),
@@ -588,6 +603,8 @@ function renderAuth() {
   if (!els.authShell) return;
   const user = state.auth.user;
   const signedIn = Boolean(user);
+  document.body.classList.toggle("auth-signed-in", signedIn);
+  document.body.classList.toggle("auth-signed-out", !signedIn);
   els.authShell.dataset.authState = state.auth.loading ? "loading" : signedIn ? "signed-in" : "signed-out";
   els.authLoginBtn.hidden = signedIn;
   els.authLoginBtn.disabled = state.auth.loading || Boolean(state.auth.error);
@@ -596,16 +613,31 @@ function renderAuth() {
     : state.auth.error
       ? "Login unavailable"
       : "Login with Google";
+  if (els.loginGateGoogleBtn) {
+    els.loginGateGoogleBtn.disabled = state.auth.loading || Boolean(state.auth.error);
+    els.loginGateGoogleBtn.textContent = state.auth.loading
+      ? "Checking login"
+      : state.auth.error
+        ? "Login unavailable"
+        : "Continue with Google";
+  }
+  if (els.loginGateGuestBtn) {
+    els.loginGateGuestBtn.disabled = state.auth.loading;
+  }
   els.authUserBtn.hidden = !signedIn;
   els.authMenu.hidden = !signedIn || !state.auth.menuOpen;
   els.authUserBtn.setAttribute("aria-expanded", signedIn && state.auth.menuOpen ? "true" : "false");
 
-  if (!signedIn) return;
+  if (!signedIn) {
+    renderCloudControls();
+    return;
+  }
   const name = authDisplayName(user);
   els.authUserName.textContent = name;
   els.authAvatar.src = user.picture || fallbackAvatar(name);
   els.authAvatar.alt = "";
   els.authUserBtn.title = user.email ? `${name} (${user.email})` : name;
+  renderCloudControls();
 }
 
 async function loadAuthUser() {
@@ -619,18 +651,55 @@ async function loadAuthUser() {
     state.auth.user = null;
     state.auth.error = error && error.message ? error.message : "Auth unavailable";
   } finally {
+    const shouldEnterTool = Boolean(state.auth.user) && (
+      state.auth.pendingToolEntry || window.sessionStorage.getItem("sky-after-login") === "tool"
+    );
+    if (state.auth.user) {
+      state.auth.guestMode = false;
+      window.sessionStorage.removeItem("sky-after-login");
+    }
     state.auth.loading = false;
     state.auth.menuOpen = false;
+    state.auth.pendingToolEntry = false;
     renderAuth();
+    if (state.auth.user) fetchCloudSaves({ silent: true });
+    if (shouldEnterTool) setConverterMode("home");
   }
 }
 
-function startLogin() {
+function startLogin(options = {}) {
   if (state.auth.loading || state.auth.error) return;
+  if (options && options.afterToolEntry) {
+    window.sessionStorage.setItem("sky-after-login", "tool");
+  }
   const currentUrl = new URL(window.location.href);
   currentUrl.searchParams.delete("auth_error");
   const returnTo = `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`;
   window.location.href = `/api/auth/login?return_to=${encodeURIComponent(returnTo || "/")}`;
+}
+
+function handleTryItOut() {
+  if (state.auth.user || state.auth.guestMode) {
+    state.auth.pendingToolEntry = false;
+    setConverterMode("home");
+    return;
+  }
+
+  state.auth.pendingToolEntry = true;
+  setConverterMode("login");
+}
+
+function continueWithGoogleFromGate() {
+  state.auth.pendingToolEntry = true;
+  startLogin({ afterToolEntry: true });
+}
+
+function continueWithoutLogin() {
+  state.auth.guestMode = true;
+  state.auth.pendingToolEntry = false;
+  window.sessionStorage.removeItem("sky-after-login");
+  setConverterMode("home");
+  setStatus("Guest mode: save manually or use timed JSON export");
 }
 
 async function logoutAuth() {
@@ -644,6 +713,11 @@ async function logoutAuth() {
   }
   state.auth.user = null;
   state.auth.error = null;
+  state.auth.guestMode = false;
+  state.auth.pendingToolEntry = false;
+  state.cloud.activeSheetId = null;
+  state.cloud.sheets = [];
+  state.cloud.status = "Sign in to save sheets online.";
   state.auth.loading = false;
   renderAuth();
   setStatus("Logged out");
@@ -653,6 +727,230 @@ function closeAuthMenu() {
   if (!state.auth.menuOpen) return;
   state.auth.menuOpen = false;
   renderAuth();
+}
+
+function buildSheetPayload() {
+  return {
+    title: els.titleInput.value || "Untitled Sky Sheet",
+    transcriber: els.authorInput.value || "",
+    keyId: state.keyId,
+    notation: state.notation,
+    duration: state.duration,
+    bpm: state.bpm,
+    events: state.events
+  };
+}
+
+function applySheetPayload(payload, statusText) {
+  els.titleInput.value = payload.title || "Untitled Sky Sheet";
+  els.authorInput.value = payload.transcriber || "";
+  state.keyId = payload.keyId || "C";
+  state.notation = payload.notation || "abc";
+  state.duration = Number(payload.duration) || 1;
+  state.bpm = Number(payload.bpm) || 96;
+  state.events = Array.isArray(payload.events) ? payload.events : [];
+  state.pending = [];
+  renderedPlaybackCache = null;
+  syncControls();
+  renderAll();
+  setStatus(statusText);
+}
+
+function setCloudStatus(text) {
+  state.cloud.status = text;
+  if (els.cloudSaveStatus) els.cloudSaveStatus.textContent = text;
+}
+
+function formatCloudDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function renderCloudControls() {
+  if (!els.cloudSavePanel) return;
+  const signedIn = Boolean(state.auth.user);
+  els.cloudSavePanel.hidden = !signedIn;
+  if (els.saveBtn) els.saveBtn.textContent = signedIn ? "Cloud save" : "Save";
+  if (els.loadBtn) els.loadBtn.textContent = signedIn ? "My sheets" : "Load";
+
+  if (signedIn) {
+    if (els.exportTitle) els.exportTitle.textContent = "Cloud saves";
+    if (els.exportSubtitle) els.exportSubtitle.textContent = "Saved to your Google account through Cohesivity";
+  }
+
+  if (!signedIn) {
+    const shouldShowAudioSave = state.converterMode === "audio" && document.body.classList.contains("audio-results-open");
+    if (els.exportTitle) els.exportTitle.textContent = shouldShowAudioSave ? "Save" : "Import / Export";
+    if (els.exportSubtitle) {
+      els.exportSubtitle.textContent = shouldShowAudioSave
+        ? "Timed JSON export for the generated Sky sheet"
+        : "ABC1-5, numbers, note names, JSON, timed JSON";
+    }
+    if (els.exportFormat && shouldShowAudioSave) els.exportFormat.value = "timed-json";
+    if (els.copyExportBtn) els.copyExportBtn.textContent = shouldShowAudioSave ? "Copy timed JSON" : "Copy export";
+    if (els.cloudSaveList) els.cloudSaveList.innerHTML = "";
+    if (els.cloudSaveStatus) els.cloudSaveStatus.textContent = "Sign in to save sheets online.";
+    return;
+  }
+
+  if (els.cloudSaveStatus) els.cloudSaveStatus.textContent = state.cloud.status;
+  if (!els.cloudSaveList) return;
+  els.cloudSaveList.innerHTML = "";
+
+  if (state.cloud.loading) {
+    const loading = document.createElement("div");
+    loading.className = "cloud-save-empty";
+    loading.textContent = "Loading saved sheets...";
+    els.cloudSaveList.append(loading);
+    return;
+  }
+
+  if (!state.cloud.sheets.length) {
+    const empty = document.createElement("div");
+    empty.className = "cloud-save-empty";
+    empty.textContent = "No cloud sheets saved yet.";
+    els.cloudSaveList.append(empty);
+    return;
+  }
+
+  state.cloud.sheets.forEach((sheet) => {
+    const row = document.createElement("div");
+    row.className = "cloud-save-row";
+    if (sheet.id === state.cloud.activeSheetId) row.classList.add("active");
+
+    const info = document.createElement("div");
+    info.className = "cloud-save-info";
+
+    const title = document.createElement("strong");
+    title.textContent = sheet.title || "Untitled Sky Sheet";
+
+    const meta = document.createElement("span");
+    meta.textContent = `${sheet.keyId || "C"} · ${sheet.bpm || 96} BPM · ${sheet.eventCount || 0} boxes · ${formatCloudDate(sheet.updatedAt)}`;
+
+    const actions = document.createElement("div");
+    actions.className = "cloud-save-actions";
+
+    const loadButton = document.createElement("button");
+    loadButton.type = "button";
+    loadButton.className = "mini-button";
+    loadButton.textContent = "Load";
+    loadButton.addEventListener("click", () => loadCloudSheet(sheet.id));
+
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "mini-button cloud-delete-button";
+    deleteButton.textContent = "Delete";
+    deleteButton.addEventListener("click", () => deleteCloudSheet(sheet.id));
+
+    info.append(title, meta);
+    actions.append(loadButton, deleteButton);
+    row.append(info, actions);
+    els.cloudSaveList.append(row);
+  });
+}
+
+async function fetchCloudSaves(options = {}) {
+  if (!state.auth.user) return;
+  state.cloud.loading = true;
+  if (!options.silent) setCloudStatus("Loading cloud sheets");
+  renderCloudControls();
+
+  try {
+    const response = await fetch("/api/sheets", { credentials: "same-origin" });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || "Could not load cloud sheets");
+    state.cloud.sheets = Array.isArray(payload.sheets) ? payload.sheets : [];
+    setCloudStatus(state.cloud.sheets.length
+      ? `${state.cloud.sheets.length} cloud sheet${state.cloud.sheets.length === 1 ? "" : "s"} available`
+      : "No cloud sheets saved yet.");
+  } catch (error) {
+    setCloudStatus(error.message || "Cloud sheets unavailable");
+  } finally {
+    state.cloud.loading = false;
+    renderCloudControls();
+  }
+}
+
+async function openCloudSaves() {
+  if (!state.auth.user) {
+    loadLocalSheet();
+    return;
+  }
+  await fetchCloudSaves();
+  if (els.cloudSavePanel && !els.cloudSavePanel.hidden) {
+    els.cloudSavePanel.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+}
+
+async function saveCloudSheet() {
+  const previousDisabled = els.saveBtn.disabled;
+  els.saveBtn.disabled = true;
+  setStatus("Saving to Cohesivity");
+
+  try {
+    const response = await fetch("/api/sheets", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: state.cloud.activeSheetId,
+        payload: buildSheetPayload()
+      })
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || "Cloud save failed");
+    state.cloud.activeSheetId = payload.sheet.id;
+    setStatus("Saved to Cohesivity cloud");
+    await fetchCloudSaves({ silent: true });
+  } catch (error) {
+    setStatus(error.message || "Cloud save failed");
+  } finally {
+    els.saveBtn.disabled = previousDisabled;
+  }
+}
+
+async function loadCloudSheet(id) {
+  if (!id) return;
+  setCloudStatus("Loading selected sheet");
+  try {
+    const response = await fetch(`/api/sheets?id=${encodeURIComponent(id)}`, { credentials: "same-origin" });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || "Cloud sheet load failed");
+    state.cloud.activeSheetId = payload.sheet.id;
+    applySheetPayload(payload.sheet.payload || {}, "Loaded Cohesivity cloud sheet");
+    await fetchCloudSaves({ silent: true });
+  } catch (error) {
+    setCloudStatus(error.message || "Cloud sheet load failed");
+    setStatus(error.message || "Cloud sheet load failed");
+  }
+}
+
+async function deleteCloudSheet(id) {
+  if (!id) return;
+  const sheet = state.cloud.sheets.find((item) => item.id === id);
+  const label = sheet ? sheet.title : "this sheet";
+  if (!window.confirm(`Delete "${label}" from cloud saves?`)) return;
+
+  setCloudStatus("Deleting cloud sheet");
+  try {
+    const response = await fetch(`/api/sheets?id=${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      credentials: "same-origin"
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || "Cloud delete failed");
+    if (state.cloud.activeSheetId === id) state.cloud.activeSheetId = null;
+    setStatus("Deleted cloud sheet");
+    await fetchCloudSaves({ silent: true });
+  } catch (error) {
+    setCloudStatus(error.message || "Cloud delete failed");
+  }
 }
 
 function renderKeyOptions() {
@@ -7775,21 +8073,20 @@ async function playSheet() {
       : "Playing rendered cached audio");
 }
 
-function saveSheet() {
-  const payload = {
-    title: els.titleInput.value,
-    transcriber: els.authorInput.value,
-    keyId: state.keyId,
-    notation: state.notation,
-    duration: state.duration,
-    bpm: state.bpm,
-    events: state.events
-  };
-  localStorage.setItem("sky-piano-sheet-maker", JSON.stringify(payload));
+function saveLocalSheet() {
+  localStorage.setItem("sky-piano-sheet-maker", JSON.stringify(buildSheetPayload()));
   setStatus("Saved locally");
 }
 
-function loadSheet() {
+function saveSheet() {
+  if (state.auth.user) {
+    saveCloudSheet();
+    return;
+  }
+  saveLocalSheet();
+}
+
+function loadLocalSheet() {
   const saved = localStorage.getItem("sky-piano-sheet-maker");
   if (!saved) {
     setStatus("No local save found");
@@ -7798,20 +8095,19 @@ function loadSheet() {
 
   try {
     const payload = JSON.parse(saved);
-    els.titleInput.value = payload.title || "Untitled Sky Sheet";
-    els.authorInput.value = payload.transcriber || "";
-    state.keyId = payload.keyId || "C";
-    state.notation = payload.notation || "abc";
-    state.duration = Number(payload.duration) || 1;
-    state.bpm = Number(payload.bpm) || 96;
-    state.events = Array.isArray(payload.events) ? payload.events : [];
-    state.pending = [];
-    syncControls();
-    renderAll();
-    setStatus("Loaded local sheet");
+    state.cloud.activeSheetId = null;
+    applySheetPayload(payload, "Loaded local sheet");
   } catch {
     setStatus("Local save is not readable");
   }
+}
+
+function loadSheet() {
+  if (state.auth.user) {
+    openCloudSaves();
+    return;
+  }
+  loadLocalSheet();
 }
 
 function copyExport() {
@@ -7856,9 +8152,9 @@ function syncControls() {
 }
 
 function setConverterMode(mode) {
-  const nextMode = ["landing", "home", "audio", "score"].includes(mode) ? mode : "home";
+  const nextMode = ["landing", "login", "home", "audio", "score"].includes(mode) ? mode : "home";
   state.converterMode = nextMode;
-  document.body.classList.remove("view-landing", "view-home", "view-audio", "view-score");
+  document.body.classList.remove("view-landing", "view-login", "view-home", "view-audio", "view-score");
   document.body.classList.add(`view-${nextMode}`);
   setAudioFinalExportMode(false);
 
@@ -7883,7 +8179,7 @@ function setConverterMode(mode) {
 }
 
 function bindEvents() {
-  els.authLoginBtn.addEventListener("click", startLogin);
+  els.authLoginBtn.addEventListener("click", () => startLogin());
   els.authUserBtn.addEventListener("click", (event) => {
     event.stopPropagation();
     state.auth.menuOpen = !state.auth.menuOpen;
@@ -7897,10 +8193,15 @@ function bindEvents() {
     closeAuthMenu();
     logoutAuth();
   });
+  if (els.refreshCloudSavesBtn) {
+    els.refreshCloudSavesBtn.addEventListener("click", fetchCloudSaves);
+  }
   document.addEventListener("click", (event) => {
     if (els.authShell && !els.authShell.contains(event.target)) closeAuthMenu();
   });
-  els.tryItOutBtn.addEventListener("click", () => setConverterMode("home"));
+  els.tryItOutBtn.addEventListener("click", handleTryItOut);
+  els.loginGateGoogleBtn.addEventListener("click", continueWithGoogleFromGate);
+  els.loginGateGuestBtn.addEventListener("click", continueWithoutLogin);
   els.chooseAudioBtn.addEventListener("click", () => setConverterMode("audio"));
   els.chooseScoreBtn.addEventListener("click", () => setConverterMode("score"));
   els.homeBtn.addEventListener("click", () => setConverterMode("home"));
@@ -8093,7 +8394,7 @@ function bindEvents() {
   els.authorInput.addEventListener("input", renderExport);
 
   document.addEventListener("keydown", (event) => {
-    if (state.converterMode === "landing" || state.converterMode === "home") return;
+    if (state.converterMode === "landing" || state.converterMode === "login" || state.converterMode === "home") return;
     const target = event.target;
     if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return;
 
