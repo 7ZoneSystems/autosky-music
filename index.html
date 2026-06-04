@@ -27,6 +27,15 @@
         </svg>
         <span>Home</span>
       </button>
+      <button id="dashboardBtn" class="global-nav-button" type="button" aria-label="Dashboard">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4.5 5.5h6v6h-6Z"></path>
+          <path d="M13.5 5.5h6v3.8h-6Z"></path>
+          <path d="M13.5 12.7h6v5.8h-6Z"></path>
+          <path d="M4.5 14.8h6v3.7h-6Z"></path>
+        </svg>
+        <span>Dashboard</span>
+      </button>
       <button id="savedSongsBtn" class="global-nav-button" type="button" aria-label="Saved songs">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M7 4.5h8.2a3.3 3.3 0 0 1 3.3 3.3V20l-6.5-3.5L5.5 20V6A1.5 1.5 0 0 1 7 4.5Z"></path>
@@ -118,6 +127,87 @@
         <div class="entry-actions" aria-label="Choose converter">
           <button id="chooseAudioBtn" class="entry-button" type="button">Audio to Sky sheet ?</button>
           <button id="chooseScoreBtn" class="entry-button" type="button">A piano sheet to Sky sheet ?</button>
+        </div>
+      </section>
+
+      <section id="dashboardScreen" class="panel dashboard-screen" aria-labelledby="dashboardTitle">
+        <div class="dashboard-hero">
+          <div>
+            <span class="eyebrow">Creator dashboard</span>
+            <h1 id="dashboardTitle">Your Sky music workspace</h1>
+            <p id="dashboardStatus">Choose a mode or sign in to see marketplace stats.</p>
+          </div>
+          <button id="refreshDashboardBtn" class="ghost-button" type="button">Refresh stats</button>
+        </div>
+
+        <div class="dashboard-mode-grid" aria-label="Dashboard modes">
+          <button id="dashboardTranslatorBtn" class="dashboard-mode-card" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M5 16.5V7.5"></path>
+              <path d="M9 19V5"></path>
+              <path d="M13 16.5V7.5"></path>
+              <path d="M17 13.5v-3"></path>
+              <path d="M3.5 12h17"></path>
+            </svg>
+            <span>Translator mode</span>
+            <strong>Audio or piano-sheet input</strong>
+            <small>Open the usual converter choice without going through Try it out.</small>
+          </button>
+          <button id="dashboardCreatorBtn" class="dashboard-mode-card" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 6.5h16"></path>
+              <path d="M6 10.5h12"></path>
+              <path d="M6 14.5h12"></path>
+              <path d="M8 18.5h8"></path>
+              <path d="M7.5 4v17"></path>
+              <path d="M16.5 4v17"></path>
+            </svg>
+            <span>Creator mode</span>
+            <strong>Build and translate sheets</strong>
+            <small>Use BPM, beat length, key setup, Sky grid, and score import on one page.</small>
+          </button>
+        </div>
+
+        <div class="dashboard-stats" aria-label="Marketplace performance">
+          <div>
+            <span class="eyebrow">Shared sheets</span>
+            <strong id="dashboardSheetCount">-</strong>
+          </div>
+          <div>
+            <span class="eyebrow">Downloads / imports</span>
+            <strong id="dashboardImportCount">-</strong>
+          </div>
+          <div>
+            <span class="eyebrow">People reached</span>
+            <strong id="dashboardPeopleCount">-</strong>
+          </div>
+          <div>
+            <span class="eyebrow">Stars</span>
+            <strong id="dashboardRatingText">-</strong>
+          </div>
+        </div>
+
+        <div id="dashboardEmptyState" class="dashboard-empty">
+          <strong>looks empty here</strong>
+          <span>Upload saved sheets to marketplace and this dashboard will show imports, people reached, and star ratings.</span>
+        </div>
+
+        <div class="dashboard-insights">
+          <section class="dashboard-chart-card" aria-labelledby="dashboardChartTitle">
+            <div class="dashboard-section-heading">
+              <h2 id="dashboardChartTitle">Sheet graph</h2>
+              <span>Imports by shared sheet</span>
+            </div>
+            <div id="dashboardChartList" class="dashboard-chart-list"></div>
+          </section>
+
+          <section class="dashboard-chart-card" aria-labelledby="dashboardTopTitle">
+            <div class="dashboard-section-heading">
+              <h2 id="dashboardTopTitle">Top sheets</h2>
+              <span>Imports and stars</span>
+            </div>
+            <div id="dashboardTopSheetsList" class="dashboard-top-list"></div>
+          </section>
         </div>
       </section>
 

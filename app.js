@@ -292,6 +292,11 @@ const state = {
     search: "",
     focusId: null
   },
+  dashboard: {
+    loading: false,
+    status: "Choose a mode or sign in to see marketplace stats.",
+    stats: null
+  },
   keyId: "C",
   notation: "abc",
   chordMode: false,
@@ -374,8 +379,21 @@ const els = {
   chooseAudioBtn: document.querySelector("#chooseAudioBtn"),
   chooseScoreBtn: document.querySelector("#chooseScoreBtn"),
   homeBtn: document.querySelector("#homeBtn"),
+  dashboardBtn: document.querySelector("#dashboardBtn"),
   savedSongsBtn: document.querySelector("#savedSongsBtn"),
   marketplaceBtn: document.querySelector("#marketplaceBtn"),
+  dashboardScreen: document.querySelector("#dashboardScreen"),
+  dashboardStatus: document.querySelector("#dashboardStatus"),
+  refreshDashboardBtn: document.querySelector("#refreshDashboardBtn"),
+  dashboardTranslatorBtn: document.querySelector("#dashboardTranslatorBtn"),
+  dashboardCreatorBtn: document.querySelector("#dashboardCreatorBtn"),
+  dashboardSheetCount: document.querySelector("#dashboardSheetCount"),
+  dashboardImportCount: document.querySelector("#dashboardImportCount"),
+  dashboardPeopleCount: document.querySelector("#dashboardPeopleCount"),
+  dashboardRatingText: document.querySelector("#dashboardRatingText"),
+  dashboardEmptyState: document.querySelector("#dashboardEmptyState"),
+  dashboardChartList: document.querySelector("#dashboardChartList"),
+  dashboardTopSheetsList: document.querySelector("#dashboardTopSheetsList"),
   savedSongsScreen: document.querySelector("#savedSongsScreen"),
   savedSongsStatus: document.querySelector("#savedSongsStatus"),
   savedSongsList: document.querySelector("#savedSongsList"),
@@ -660,6 +678,7 @@ function renderAuth() {
     renderCloudControls();
     renderSavedSongsPage();
     renderMarketplace();
+    renderDashboard();
     return;
   }
   const name = authDisplayName(user);
@@ -670,6 +689,7 @@ function renderAuth() {
   renderCloudControls();
   renderSavedSongsPage();
   renderMarketplace();
+  renderDashboard();
 }
 
 async function loadAuthUser() {
@@ -694,8 +714,11 @@ async function loadAuthUser() {
     state.auth.menuOpen = false;
     state.auth.pendingToolEntry = false;
     renderAuth();
-    if (state.auth.user) fetchCloudSaves({ silent: true });
-    if (shouldEnterTool) setConverterMode("home");
+    if (state.auth.user) {
+      fetchCloudSaves({ silent: true });
+      fetchDashboard({ silent: true });
+    }
+    if (shouldEnterTool) setConverterMode("dashboard");
   }
 }
 
@@ -713,7 +736,7 @@ function startLogin(options = {}) {
 function handleTryItOut() {
   if (state.auth.user || state.auth.guestMode) {
     state.auth.pendingToolEntry = false;
-    setConverterMode("home");
+    setConverterMode("dashboard");
     return;
   }
 
@@ -730,7 +753,7 @@ function continueWithoutLogin() {
   state.auth.guestMode = true;
   state.auth.pendingToolEntry = false;
   window.sessionStorage.removeItem("sky-after-login");
-  setConverterMode("home");
+  setConverterMode("dashboard");
   setStatus("Guest mode: save manually or use timed JSON export");
 }
 
@@ -963,6 +986,138 @@ function renderSavedSongsPage() {
     row.append(info, actions);
     els.savedSongsList.append(row);
   });
+}
+
+function formatDashboardNumber(value) {
+  const number = Number(value) || 0;
+  return number.toLocaleString();
+}
+
+function formatDashboardRating(stats) {
+  if (!stats || !stats.totalRatings) return "No stars yet";
+  const rating = Number(stats.averageRating) || 0;
+  return `${rating.toFixed(rating % 1 ? 1 : 0)} / 5 · ${formatDashboardNumber(stats.totalRatings)}`;
+}
+
+function dashboardEmptyRow(text) {
+  const empty = document.createElement("div");
+  empty.className = "library-empty";
+  empty.textContent = text;
+  return empty;
+}
+
+function renderDashboard() {
+  if (!els.dashboardScreen) return;
+  const signedIn = Boolean(state.auth.user);
+  const stats = state.dashboard.stats;
+  const topSheets = stats && Array.isArray(stats.topSheets) ? stats.topSheets : [];
+
+  if (els.dashboardStatus) {
+    els.dashboardStatus.textContent = state.dashboard.loading
+      ? "Loading marketplace stats"
+      : signedIn
+        ? state.dashboard.status
+        : "Choose a mode or sign in to see your marketplace stats.";
+  }
+
+  if (els.dashboardSheetCount) els.dashboardSheetCount.textContent = signedIn && stats ? formatDashboardNumber(stats.sheetCount) : "-";
+  if (els.dashboardImportCount) els.dashboardImportCount.textContent = signedIn && stats ? formatDashboardNumber(stats.totalImports) : "-";
+  if (els.dashboardPeopleCount) els.dashboardPeopleCount.textContent = signedIn && stats ? formatDashboardNumber(stats.totalImporters) : "-";
+  if (els.dashboardRatingText) els.dashboardRatingText.textContent = signedIn && stats ? formatDashboardRating(stats) : "-";
+
+  const emptyVisible = signedIn && !state.dashboard.loading && stats && !stats.sheetCount;
+  if (els.dashboardEmptyState) els.dashboardEmptyState.classList.toggle("is-visible", Boolean(emptyVisible));
+
+  if (els.dashboardChartList) {
+    els.dashboardChartList.innerHTML = "";
+    if (!signedIn) {
+      els.dashboardChartList.append(dashboardEmptyRow("Sign in to see imports and downloads."));
+    } else if (state.dashboard.loading) {
+      els.dashboardChartList.append(dashboardEmptyRow("Loading graph..."));
+    } else if (!topSheets.length) {
+      els.dashboardChartList.append(dashboardEmptyRow("looks empty here"));
+    } else {
+      const maxImports = Math.max(1, ...topSheets.map((sheet) => Number(sheet.importCount) || 0));
+      topSheets.forEach((sheet) => {
+        const row = document.createElement("div");
+        row.className = "dashboard-bar-row";
+        const label = document.createElement("span");
+        label.className = "dashboard-bar-label";
+        label.textContent = sheet.title || "Untitled Sky Sheet";
+        const track = document.createElement("div");
+        track.className = "dashboard-bar-track";
+        const fill = document.createElement("div");
+        fill.className = "dashboard-bar-fill";
+        fill.style.width = `${Math.max(5, ((Number(sheet.importCount) || 0) / maxImports) * 100)}%`;
+        track.append(fill);
+        const value = document.createElement("span");
+        value.textContent = `${formatDashboardNumber(sheet.importCount)} imports`;
+        row.append(label, track, value);
+        els.dashboardChartList.append(row);
+      });
+    }
+  }
+
+  if (els.dashboardTopSheetsList) {
+    els.dashboardTopSheetsList.innerHTML = "";
+    if (!signedIn) {
+      els.dashboardTopSheetsList.append(dashboardEmptyRow("Creator stats appear after login."));
+    } else if (state.dashboard.loading) {
+      els.dashboardTopSheetsList.append(dashboardEmptyRow("Loading sheets..."));
+    } else if (!topSheets.length) {
+      els.dashboardTopSheetsList.append(dashboardEmptyRow("looks empty here"));
+    } else {
+      topSheets.forEach((sheet) => {
+        const row = document.createElement("div");
+        row.className = "dashboard-top-row";
+        const info = document.createElement("div");
+        const title = document.createElement("div");
+        title.className = "dashboard-top-title";
+        title.textContent = sheet.title || "Untitled Sky Sheet";
+        const meta = document.createElement("div");
+        meta.className = "dashboard-top-meta";
+        meta.textContent = `${sheet.keyId || "C"} · ${sheet.bpm || 96} BPM · ${formatDashboardNumber(sheet.importCount)} imports · ${sheet.ratingCount ? `${sheet.averageRating}★` : "no stars"}`;
+        info.append(title, meta);
+        const open = document.createElement("button");
+        open.type = "button";
+        open.className = "mini-button";
+        open.textContent = "Open";
+        open.addEventListener("click", () => openMarketplaceLink(sheet.id));
+        row.append(info, open);
+        els.dashboardTopSheetsList.append(row);
+      });
+    }
+  }
+}
+
+async function fetchDashboard(options = {}) {
+  if (!state.auth.user) {
+    state.dashboard.stats = null;
+    state.dashboard.status = "Choose a mode or sign in to see marketplace stats.";
+    renderDashboard();
+    return;
+  }
+  state.dashboard.loading = true;
+  if (!options.silent) state.dashboard.status = "Loading marketplace stats";
+  renderDashboard();
+  try {
+    const response = await fetch("/api/marketplace?dashboard=1", { credentials: "same-origin" });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || "Dashboard stats unavailable");
+    state.dashboard.stats = payload.dashboard || null;
+    state.dashboard.status = state.dashboard.stats && state.dashboard.stats.sheetCount
+      ? `${state.dashboard.stats.sheetCount} shared sheet${state.dashboard.stats.sheetCount === 1 ? "" : "s"} tracked`
+      : "looks empty here";
+  } catch (error) {
+    state.dashboard.status = error.message || "Dashboard stats unavailable";
+  } finally {
+    state.dashboard.loading = false;
+    renderDashboard();
+  }
+}
+
+function openDashboard() {
+  setConverterMode("dashboard");
 }
 
 async function fetchCloudSaves(options = {}) {
@@ -1333,6 +1488,7 @@ async function loadMarketplaceSheet(id, options = {}) {
     const response = await fetch(`/api/marketplace?id=${encodeURIComponent(id)}`, { credentials: "same-origin" });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || "Marketplace sheet load failed");
+    trackMarketplaceImport(id, options.playAfterLoad ? "play" : "import");
     state.cloud.activeSheetId = null;
     applySheetPayload(payload.sheet.payload || {}, "Loaded marketplace sheet");
     setConverterMode("score");
@@ -1344,6 +1500,19 @@ async function loadMarketplaceSheet(id, options = {}) {
     const message = error.message || "Marketplace sheet load failed";
     setMarketplaceStatus(message);
     setStatus(message);
+  }
+}
+
+async function trackMarketplaceImport(id, eventType) {
+  try {
+    await fetch("/api/marketplace", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "trackImport", marketplaceId: id, eventType })
+    });
+  } catch {
+    // Analytics should never block importing or playing a shared sheet.
   }
 }
 
@@ -9009,14 +9178,15 @@ function syncControls() {
 }
 
 function setConverterMode(mode) {
-  const nextMode = ["landing", "login", "home", "audio", "score", "saved", "marketplace"].includes(mode) ? mode : "home";
+  const nextMode = ["landing", "login", "home", "dashboard", "audio", "score", "saved", "marketplace"].includes(mode) ? mode : "dashboard";
   state.converterMode = nextMode;
-  document.body.classList.remove("view-landing", "view-login", "view-home", "view-audio", "view-score", "view-saved", "view-marketplace");
+  document.body.classList.remove("view-landing", "view-login", "view-home", "view-dashboard", "view-audio", "view-score", "view-saved", "view-marketplace");
   document.body.classList.add(`view-${nextMode}`);
-  [els.homeBtn, els.savedSongsBtn, els.marketplaceBtn].forEach((button) => {
+  [els.homeBtn, els.dashboardBtn, els.savedSongsBtn, els.marketplaceBtn].forEach((button) => {
     if (button) button.classList.remove("active");
   });
   if ((nextMode === "landing" || nextMode === "home") && els.homeBtn) els.homeBtn.classList.add("active");
+  if (nextMode === "dashboard" && els.dashboardBtn) els.dashboardBtn.classList.add("active");
   if (nextMode === "saved" && els.savedSongsBtn) els.savedSongsBtn.classList.add("active");
   if (nextMode === "marketplace" && els.marketplaceBtn) els.marketplaceBtn.classList.add("active");
   setAudioFinalExportMode(false);
@@ -9039,6 +9209,11 @@ function setConverterMode(mode) {
     document.body.classList.remove("audio-results-open");
     fetchCloudSaves({ silent: true });
     renderSavedSongsPage();
+  } else if (nextMode === "dashboard") {
+    setStatus("Dashboard");
+    document.body.classList.remove("audio-results-open");
+    fetchDashboard({ silent: true });
+    renderDashboard();
   } else if (nextMode === "marketplace") {
     setStatus("Marketplace");
     document.body.classList.remove("audio-results-open");
@@ -9077,6 +9252,16 @@ function bindEvents() {
   els.chooseAudioBtn.addEventListener("click", () => setConverterMode("audio"));
   els.chooseScoreBtn.addEventListener("click", () => setConverterMode("score"));
   els.homeBtn.addEventListener("click", () => setConverterMode("landing"));
+  els.dashboardBtn.addEventListener("click", openDashboard);
+  if (els.refreshDashboardBtn) {
+    els.refreshDashboardBtn.addEventListener("click", () => fetchDashboard());
+  }
+  if (els.dashboardTranslatorBtn) {
+    els.dashboardTranslatorBtn.addEventListener("click", () => setConverterMode("home"));
+  }
+  if (els.dashboardCreatorBtn) {
+    els.dashboardCreatorBtn.addEventListener("click", () => setConverterMode("score"));
+  }
   els.savedSongsBtn.addEventListener("click", openSavedSongs);
   els.marketplaceBtn.addEventListener("click", openMarketplace);
   if (els.refreshSavedSongsBtn) {
@@ -9295,7 +9480,7 @@ function bindEvents() {
   els.authorInput.addEventListener("input", renderExport);
 
   document.addEventListener("keydown", (event) => {
-    if (state.converterMode === "landing" || state.converterMode === "login" || state.converterMode === "home" || state.converterMode === "saved" || state.converterMode === "marketplace") return;
+    if (state.converterMode === "landing" || state.converterMode === "login" || state.converterMode === "home" || state.converterMode === "dashboard" || state.converterMode === "saved" || state.converterMode === "marketplace") return;
     const target = event.target;
     if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return;
 

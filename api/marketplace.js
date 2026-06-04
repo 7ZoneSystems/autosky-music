@@ -47,6 +47,11 @@ function compactText(value, fallback, limit) {
   return (text || fallback).slice(0, limit);
 }
 
+function firstHeaderValue(value) {
+  if (Array.isArray(value)) return value[0] || "";
+  return String(value || "").split(",")[0].trim();
+}
+
 function safeInteger(value, fallback) {
   const number = Number(value);
   return Number.isFinite(number) ? Math.round(number) : fallback;
@@ -123,6 +128,15 @@ function marketplaceLink(req, id) {
   return url.toString();
 }
 
+function requestActorKey(req, user) {
+  const id = userKey(user);
+  if (id) return `user:${id}`;
+  const headers = req.headers || {};
+  const ip = firstHeaderValue(headers["x-forwarded-for"] || headers["x-real-ip"] || (req.socket && req.socket.remoteAddress) || "");
+  const agent = firstHeaderValue(headers["user-agent"] || "");
+  return `anon:${crypto.createHash("sha256").update(`${ip}|${agent}`).digest("hex").slice(0, 32)}`;
+}
+
 async function getEdgeToken() {
   const appKey = getApplicationKey();
   if (!appKey) throw new Error("COHESIVITY_APPLICATION_KEY is not configured");
@@ -175,6 +189,14 @@ async function cleanupExpiredMarketplaceDeletes() {
   const now = new Date().toISOString();
   await dbQuery(
     `DELETE FROM sky_marketplace_ratings
+      WHERE marketplace_id IN (
+        SELECT id FROM sky_marketplace_sheets
+         WHERE delete_after_at IS NOT NULL AND delete_after_at <= ?
+      )`,
+    [now]
+  );
+  await dbQuery(
+    `DELETE FROM sky_marketplace_imports
       WHERE marketplace_id IN (
         SELECT id FROM sky_marketplace_sheets
          WHERE delete_after_at IS NOT NULL AND delete_after_at <= ?
@@ -256,12 +278,24 @@ function ensureSchema() {
         updated_at TEXT NOT NULL,
         PRIMARY KEY (marketplace_id, user_id)
       );
+      CREATE TABLE IF NOT EXISTS sky_marketplace_imports (
+        id TEXT PRIMARY KEY,
+        marketplace_id TEXT NOT NULL,
+        owner_id TEXT NOT NULL,
+        actor_key TEXT NOT NULL,
+        action TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
       CREATE INDEX IF NOT EXISTS idx_sky_marketplace_title
         ON sky_marketplace_sheets (title);
       CREATE INDEX IF NOT EXISTS idx_sky_marketplace_published
         ON sky_marketplace_sheets (published_at DESC);
       CREATE INDEX IF NOT EXISTS idx_sky_marketplace_ratings_sheet
         ON sky_marketplace_ratings (marketplace_id);
+      CREATE INDEX IF NOT EXISTS idx_sky_marketplace_imports_owner
+        ON sky_marketplace_imports (owner_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_sky_marketplace_imports_sheet
+        ON sky_marketplace_imports (marketplace_id);
     `);
       await addMarketplaceColumn("sheet_hash TEXT");
       await addMarketplaceColumn("delete_requested_at TEXT");
@@ -358,6 +392,71 @@ async function getMarketplaceSheet(viewerId, id) {
   const row = result.rows && result.rows[0];
   if (!row) return null;
   return normalizeMarketplaceRow(row, true);
+}
+
+async function getOwnerDashboard(userId) {
+  await ensureSchema();
+  await cleanupExpiredMarketplaceDeletes();
+  const result = await dbQuery(
+    `SELECT
+        m.id,
+        m.title,
+        m.key_id AS keyId,
+        m.bpm,
+        m.event_count AS eventCount,
+        m.published_at AS publishedAt,
+        m.updated_at AS updatedAt,
+        COALESCE(r.averageRating, 0) AS averageRating,
+        COALESCE(r.ratingCount, 0) AS ratingCount,
+        COALESCE(r.ratingSum, 0) AS ratingSum,
+        COALESCE(i.importCount, 0) AS importCount,
+        COALESCE(i.importerCount, 0) AS importerCount
+       FROM sky_marketplace_sheets m
+       LEFT JOIN (
+         SELECT marketplace_id, ROUND(AVG(rating), 2) AS averageRating, COUNT(*) AS ratingCount, SUM(rating) AS ratingSum
+           FROM sky_marketplace_ratings
+          GROUP BY marketplace_id
+       ) r ON r.marketplace_id = m.id
+       LEFT JOIN (
+         SELECT marketplace_id, COUNT(*) AS importCount, COUNT(DISTINCT actor_key) AS importerCount
+           FROM sky_marketplace_imports
+          GROUP BY marketplace_id
+       ) i ON i.marketplace_id = m.id
+      WHERE m.owner_id = ?
+      ORDER BY importCount DESC, ratingCount DESC, m.published_at DESC
+      LIMIT 100`,
+    [userId]
+  );
+  const sheets = (result.rows || []).map((row) => ({
+    id: row.id,
+    title: row.title || "Untitled Sky Sheet",
+    keyId: row.keyId || row.key_id || "C",
+    bpm: row.bpm,
+    eventCount: row.eventCount ?? row.event_count ?? 0,
+    publishedAt: row.publishedAt || row.published_at,
+    updatedAt: row.updatedAt || row.updated_at,
+    averageRating: Number(row.averageRating ?? row.average_rating ?? 0),
+    ratingCount: Number(row.ratingCount ?? row.rating_count ?? 0),
+    ratingSum: Number(row.ratingSum ?? row.rating_sum ?? 0),
+    importCount: Number(row.importCount ?? row.import_count ?? 0),
+    importerCount: Number(row.importerCount ?? row.importer_count ?? 0)
+  }));
+  const totals = sheets.reduce((next, sheet) => {
+    next.sheetCount += 1;
+    next.totalImports += sheet.importCount;
+    next.totalImporters += sheet.importerCount;
+    next.totalRatings += sheet.ratingCount;
+    next.ratingSum += sheet.ratingSum;
+    return next;
+  }, { sheetCount: 0, totalImports: 0, totalImporters: 0, totalRatings: 0, ratingSum: 0 });
+  return {
+    sheetCount: totals.sheetCount,
+    totalImports: totals.totalImports,
+    totalImporters: totals.totalImporters,
+    totalRatings: totals.totalRatings,
+    averageRating: totals.totalRatings ? Number((totals.ratingSum / totals.totalRatings).toFixed(2)) : 0,
+    topSheets: sheets.slice(0, 8)
+  };
 }
 
 function normalizeMarketplaceRow(row, includePayload = false) {
@@ -588,6 +687,35 @@ async function scheduleMarketplaceDelete(user, body) {
   return getMarketplaceSheet(userId, marketplaceId);
 }
 
+async function trackMarketplaceImport(req, user, body) {
+  await ensureSchema();
+  const marketplaceId = cleanId(body && body.marketplaceId);
+  if (!marketplaceId) throw marketplaceError("Missing marketplace sheet id", 400);
+
+  const result = await dbQuery(
+    "SELECT id, owner_id AS ownerId FROM sky_marketplace_sheets WHERE id = ? LIMIT 1",
+    [marketplaceId]
+  );
+  const row = result.rows && result.rows[0];
+  if (!row) throw marketplaceError("Marketplace sheet not found", 404);
+
+  const ownerId = String(row.ownerId || row.owner_id || "");
+  const viewerId = userKey(user);
+  if (viewerId && viewerId === ownerId) {
+    return { ok: true, counted: false };
+  }
+
+  const actorKey = requestActorKey(req, user);
+  const action = compactText(body && body.eventType || "import", "import", 24);
+  await dbQuery(
+    `INSERT INTO sky_marketplace_imports
+      (id, marketplace_id, owner_id, actor_key, action, created_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [crypto.randomUUID(), marketplaceId, ownerId, actorKey, action, new Date().toISOString()]
+  );
+  return { ok: true, counted: true };
+}
+
 async function rateMarketplaceSheet(user, body) {
   await ensureSchema();
   const userId = userKey(user);
@@ -625,6 +753,14 @@ module.exports = async function marketplace(req, res) {
   try {
     if (req.method === "GET") {
       const url = new URL(req.url || "/", "http://localhost");
+      if (url.searchParams.get("dashboard") === "1") {
+        if (!user) {
+          sendJson(res, 401, { error: "Sign in to view dashboard stats" });
+          return;
+        }
+        sendJson(res, 200, { dashboard: await getOwnerDashboard(viewerId) });
+        return;
+      }
       const id = cleanId(url.searchParams.get("id"));
       if (id) {
         const sheet = await getMarketplaceSheet(viewerId, id);
@@ -645,12 +781,17 @@ module.exports = async function marketplace(req, res) {
       return;
     }
 
+    const body = await readJson(req);
+    if (body.action === "trackImport") {
+      sendJson(res, 200, await trackMarketplaceImport(req, user, body));
+      return;
+    }
+
     if (!user) {
       sendJson(res, 401, { error: "Sign in to publish, update, delete, or rate marketplace sheets" });
       return;
     }
 
-    const body = await readJson(req);
     if (body.action === "publish") {
       sendJson(res, 200, await publishSavedSheet(req, user, body));
       return;
