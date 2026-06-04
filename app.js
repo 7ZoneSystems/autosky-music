@@ -283,6 +283,12 @@ const state = {
     loading: false,
     status: "Sign in to save sheets online."
   },
+  marketplace: {
+    sheets: [],
+    loading: false,
+    status: "Shared Sky sheets from creators.",
+    search: ""
+  },
   keyId: "C",
   notation: "abc",
   chordMode: false,
@@ -365,6 +371,17 @@ const els = {
   chooseAudioBtn: document.querySelector("#chooseAudioBtn"),
   chooseScoreBtn: document.querySelector("#chooseScoreBtn"),
   homeBtn: document.querySelector("#homeBtn"),
+  savedSongsBtn: document.querySelector("#savedSongsBtn"),
+  marketplaceBtn: document.querySelector("#marketplaceBtn"),
+  savedSongsScreen: document.querySelector("#savedSongsScreen"),
+  savedSongsStatus: document.querySelector("#savedSongsStatus"),
+  savedSongsList: document.querySelector("#savedSongsList"),
+  refreshSavedSongsBtn: document.querySelector("#refreshSavedSongsBtn"),
+  marketplaceScreen: document.querySelector("#marketplaceScreen"),
+  marketplaceStatus: document.querySelector("#marketplaceStatus"),
+  marketplaceSearchInput: document.querySelector("#marketplaceSearchInput"),
+  refreshMarketplaceBtn: document.querySelector("#refreshMarketplaceBtn"),
+  marketplaceList: document.querySelector("#marketplaceList"),
   audioWizardPanel: document.querySelector("#audioWizardPanel"),
   audioWizardFileInput: document.querySelector("#audioWizardFileInput"),
   wizardMelodySensitivityInput: document.querySelector("#wizardMelodySensitivityInput"),
@@ -383,6 +400,7 @@ const els = {
   audioWizardKeyTitle: document.querySelector("#audioWizardKeyTitle"),
   audioWizardKeyDescription: document.querySelector("#audioWizardKeyDescription"),
   audioShowOutputBtn: document.querySelector("#audioShowOutputBtn"),
+  audioRegenerateBtn: document.querySelector("#audioRegenerateBtn"),
   audioPlayResultBtn: document.querySelector("#audioPlayResultBtn"),
   audioRestartWizardBtn: document.querySelector("#audioRestartWizardBtn"),
   audioResultTabs: document.querySelector("#audioResultTabs"),
@@ -499,6 +517,7 @@ let playbackScheduler = null;
 let playbackSessionId = 0;
 let activePlaybackSource = null;
 let renderedPlaybackCache = null;
+let marketplaceSearchTimer = null;
 const skyPianoSampleCache = new Map();
 const AUDIO_WIZARD_TIPS = [
   "Sky music tip: leave space between phrases so the 15-button grid can breathe.",
@@ -630,6 +649,8 @@ function renderAuth() {
 
   if (!signedIn) {
     renderCloudControls();
+    renderSavedSongsPage();
+    renderMarketplace();
     return;
   }
   const name = authDisplayName(user);
@@ -638,6 +659,8 @@ function renderAuth() {
   els.authAvatar.alt = "";
   els.authUserBtn.title = user.email ? `${name} (${user.email})` : name;
   renderCloudControls();
+  renderSavedSongsPage();
+  renderMarketplace();
 }
 
 async function loadAuthUser() {
@@ -842,6 +865,12 @@ function renderCloudControls() {
     loadButton.textContent = "Load";
     loadButton.addEventListener("click", () => loadCloudSheet(sheet.id));
 
+    const publishButton = document.createElement("button");
+    publishButton.type = "button";
+    publishButton.className = "mini-button";
+    publishButton.textContent = "Upload";
+    publishButton.addEventListener("click", () => publishSavedSheet(sheet.id));
+
     const deleteButton = document.createElement("button");
     deleteButton.type = "button";
     deleteButton.className = "mini-button cloud-delete-button";
@@ -849,9 +878,81 @@ function renderCloudControls() {
     deleteButton.addEventListener("click", () => deleteCloudSheet(sheet.id));
 
     info.append(title, meta);
-    actions.append(loadButton, deleteButton);
+    actions.append(loadButton, publishButton, deleteButton);
     row.append(info, actions);
     els.cloudSaveList.append(row);
+  });
+}
+
+function renderSavedSongsPage() {
+  if (!els.savedSongsList) return;
+  const signedIn = Boolean(state.auth.user);
+  els.savedSongsStatus.textContent = signedIn
+    ? state.cloud.status
+    : "Sign in to save, retrieve, and upload sheets to marketplace.";
+  els.savedSongsList.innerHTML = "";
+
+  if (!signedIn) {
+    const empty = document.createElement("div");
+    empty.className = "library-empty";
+    empty.textContent = "Saved songs are available after Google login.";
+    els.savedSongsList.append(empty);
+    return;
+  }
+
+  if (state.cloud.loading) {
+    const loading = document.createElement("div");
+    loading.className = "library-empty";
+    loading.textContent = "Loading saved songs...";
+    els.savedSongsList.append(loading);
+    return;
+  }
+
+  if (!state.cloud.sheets.length) {
+    const empty = document.createElement("div");
+    empty.className = "library-empty";
+    empty.textContent = "No saved songs yet. Build a sheet, then Cloud save it.";
+    els.savedSongsList.append(empty);
+    return;
+  }
+
+  state.cloud.sheets.forEach((sheet) => {
+    const row = document.createElement("div");
+    row.className = "library-row";
+    if (sheet.id === state.cloud.activeSheetId) row.classList.add("active");
+
+    const info = document.createElement("div");
+    info.className = "library-info";
+    const title = document.createElement("strong");
+    title.textContent = sheet.title || "Untitled Sky Sheet";
+    const meta = document.createElement("span");
+    meta.textContent = `${sheet.keyId || "C"} · ${sheet.bpm || 96} BPM · ${sheet.eventCount || 0} boxes · saved ${formatCloudDate(sheet.updatedAt)}`;
+    info.append(title, meta);
+
+    const actions = document.createElement("div");
+    actions.className = "library-actions";
+
+    const loadButton = document.createElement("button");
+    loadButton.type = "button";
+    loadButton.className = "mini-button";
+    loadButton.textContent = "Load";
+    loadButton.addEventListener("click", () => loadCloudSheet(sheet.id, { openSheet: true }));
+
+    const publishButton = document.createElement("button");
+    publishButton.type = "button";
+    publishButton.className = "mini-button";
+    publishButton.textContent = "Upload to marketplace";
+    publishButton.addEventListener("click", () => publishSavedSheet(sheet.id));
+
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "mini-button cloud-delete-button";
+    deleteButton.textContent = "Delete";
+    deleteButton.addEventListener("click", () => deleteCloudSheet(sheet.id));
+
+    actions.append(loadButton, publishButton, deleteButton);
+    row.append(info, actions);
+    els.savedSongsList.append(row);
   });
 }
 
@@ -860,6 +961,7 @@ async function fetchCloudSaves(options = {}) {
   state.cloud.loading = true;
   if (!options.silent) setCloudStatus("Loading cloud sheets");
   renderCloudControls();
+  renderSavedSongsPage();
 
   try {
     const response = await fetch("/api/sheets", { credentials: "same-origin" });
@@ -874,6 +976,7 @@ async function fetchCloudSaves(options = {}) {
   } finally {
     state.cloud.loading = false;
     renderCloudControls();
+    renderSavedSongsPage();
   }
 }
 
@@ -886,6 +989,15 @@ async function openCloudSaves() {
   if (els.cloudSavePanel && !els.cloudSavePanel.hidden) {
     els.cloudSavePanel.scrollIntoView({ behavior: "smooth", block: "center" });
   }
+}
+
+async function openSavedSongs() {
+  if (!state.auth.user) {
+    state.auth.pendingToolEntry = false;
+    setConverterMode("login");
+    return;
+  }
+  setConverterMode("saved");
 }
 
 async function saveCloudSheet() {
@@ -915,7 +1027,7 @@ async function saveCloudSheet() {
   }
 }
 
-async function loadCloudSheet(id) {
+async function loadCloudSheet(id, options = {}) {
   if (!id) return;
   setCloudStatus("Loading selected sheet");
   try {
@@ -925,9 +1037,238 @@ async function loadCloudSheet(id) {
     state.cloud.activeSheetId = payload.sheet.id;
     applySheetPayload(payload.sheet.payload || {}, "Loaded Cohesivity cloud sheet");
     await fetchCloudSaves({ silent: true });
+    if (options.openSheet) setConverterMode("score");
   } catch (error) {
     setCloudStatus(error.message || "Cloud sheet load failed");
     setStatus(error.message || "Cloud sheet load failed");
+  }
+}
+
+async function publishSavedSheet(sheetId) {
+  if (!state.auth.user) {
+    setConverterMode("login");
+    return;
+  }
+
+  setCloudStatus("Uploading saved sheet to marketplace");
+  if (els.savedSongsStatus) els.savedSongsStatus.textContent = "Uploading saved sheet to marketplace";
+
+  try {
+    const response = await fetch("/api/marketplace", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "publish", sheetId })
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || "Marketplace upload failed");
+    setStatus("Uploaded to marketplace");
+    state.marketplace.search = "";
+    if (els.marketplaceSearchInput) els.marketplaceSearchInput.value = "";
+    await fetchMarketplace({ silent: true });
+    setConverterMode("marketplace");
+  } catch (error) {
+    const message = error.message || "Marketplace upload failed";
+    setCloudStatus(message);
+    if (els.savedSongsStatus) els.savedSongsStatus.textContent = message;
+    setStatus(message);
+  }
+}
+
+function setMarketplaceStatus(text) {
+  state.marketplace.status = text;
+  if (els.marketplaceStatus) els.marketplaceStatus.textContent = text;
+}
+
+function marketplaceRatingText(sheet) {
+  const rating = Number(sheet.averageRating) || 0;
+  const count = Number(sheet.ratingCount) || 0;
+  return count ? `${rating.toFixed(rating % 1 ? 1 : 0)} / 5 · ${count} rating${count === 1 ? "" : "s"}` : "No ratings yet";
+}
+
+function renderMarketplace() {
+  if (!els.marketplaceList) return;
+  els.marketplaceStatus.textContent = state.marketplace.status;
+  els.marketplaceList.innerHTML = "";
+
+  if (state.marketplace.loading) {
+    const loading = document.createElement("div");
+    loading.className = "library-empty";
+    loading.textContent = "Loading marketplace...";
+    els.marketplaceList.append(loading);
+    return;
+  }
+
+  if (!state.marketplace.sheets.length) {
+    const empty = document.createElement("div");
+    empty.className = "library-empty";
+    empty.textContent = state.marketplace.search ? "No sheets match that name." : "No marketplace sheets yet.";
+    els.marketplaceList.append(empty);
+    return;
+  }
+
+  state.marketplace.sheets.forEach((sheet) => {
+    const card = document.createElement("article");
+    card.className = "marketplace-card";
+
+    const creator = document.createElement("div");
+    creator.className = "marketplace-creator";
+
+    const avatar = document.createElement("img");
+    avatar.alt = "";
+    avatar.referrerPolicy = "no-referrer";
+    avatar.src = sheet.ownerPicture || fallbackAvatar(sheet.ownerName || "Sky creator");
+
+    const creatorText = document.createElement("div");
+    const owner = document.createElement("strong");
+    owner.textContent = sheet.ownerName || "Sky creator";
+    const published = document.createElement("span");
+    published.textContent = `Published ${formatCloudDate(sheet.publishedAt)}`;
+    creatorText.append(owner, published);
+    creator.append(avatar, creatorText);
+
+    const title = document.createElement("h3");
+    title.textContent = sheet.title || "Untitled Sky Sheet";
+
+    const meta = document.createElement("p");
+    meta.textContent = `${sheet.keyId || "C"} · ${sheet.bpm || 96} BPM · ${sheet.eventCount || 0} boxes`;
+
+    const rating = document.createElement("div");
+    rating.className = "marketplace-rating";
+    const ratingSummary = document.createElement("span");
+    ratingSummary.textContent = marketplaceRatingText(sheet);
+    const stars = document.createElement("div");
+    stars.className = "rating-stars";
+    for (let value = 1; value <= 5; value += 1) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = "★";
+      button.className = value <= Number(sheet.myRating || 0) ? "active" : "";
+      button.title = state.auth.user ? `Rate ${value} out of 5` : "Sign in to rate";
+      button.addEventListener("click", () => rateMarketplaceSheet(sheet.id, value));
+      stars.append(button);
+    }
+    rating.append(ratingSummary, stars);
+
+    const actions = document.createElement("div");
+    actions.className = "marketplace-actions";
+    const importButton = document.createElement("button");
+    importButton.type = "button";
+    importButton.className = "primary-button";
+    importButton.textContent = "Import";
+    importButton.addEventListener("click", () => loadMarketplaceSheet(sheet.id));
+
+    const playButton = document.createElement("button");
+    playButton.type = "button";
+    playButton.className = "ghost-button";
+    playButton.textContent = "Play";
+    playButton.addEventListener("click", () => loadMarketplaceSheet(sheet.id, { playAfterLoad: true }));
+
+    actions.append(importButton, playButton);
+
+    card.append(creator, title, meta, rating, actions);
+    els.marketplaceList.append(card);
+  });
+}
+
+async function fetchMarketplace(options = {}) {
+  state.marketplace.loading = true;
+  if (!options.silent) setMarketplaceStatus("Loading marketplace");
+  renderMarketplace();
+
+  try {
+    const query = state.marketplace.search ? `?search=${encodeURIComponent(state.marketplace.search)}` : "";
+    const response = await fetch(`/api/marketplace${query}`, { credentials: "same-origin" });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || "Marketplace unavailable");
+    state.marketplace.sheets = Array.isArray(payload.sheets) ? payload.sheets : [];
+    setMarketplaceStatus(state.marketplace.sheets.length
+      ? `${state.marketplace.sheets.length} shared sheet${state.marketplace.sheets.length === 1 ? "" : "s"}`
+      : state.marketplace.search
+        ? "No sheets match that name"
+        : "No marketplace sheets yet");
+  } catch (error) {
+    setMarketplaceStatus(error.message || "Marketplace unavailable");
+  } finally {
+    state.marketplace.loading = false;
+    renderMarketplace();
+  }
+}
+
+function openMarketplace() {
+  setConverterMode("marketplace");
+}
+
+function scheduleMarketplaceSearch() {
+  state.marketplace.search = els.marketplaceSearchInput ? els.marketplaceSearchInput.value.trim() : "";
+  if (marketplaceSearchTimer) window.clearTimeout(marketplaceSearchTimer);
+  marketplaceSearchTimer = window.setTimeout(() => fetchMarketplace(), 260);
+}
+
+async function loadMarketplaceSheet(id, options = {}) {
+  setMarketplaceStatus("Loading shared sheet");
+  if (options.playAfterLoad) {
+    try {
+      const ctx = getAudioContext();
+      if (ctx.state === "suspended") await ctx.resume();
+    } catch {
+      // Playback will report its own failure after import if the browser blocks audio.
+    }
+  }
+
+  try {
+    const response = await fetch(`/api/marketplace?id=${encodeURIComponent(id)}`, { credentials: "same-origin" });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || "Marketplace sheet load failed");
+    state.cloud.activeSheetId = null;
+    applySheetPayload(payload.sheet.payload || {}, "Loaded marketplace sheet");
+    setConverterMode("score");
+    if (options.playAfterLoad) {
+      await nextAnimationFrame();
+      playSheet();
+    }
+  } catch (error) {
+    const message = error.message || "Marketplace sheet load failed";
+    setMarketplaceStatus(message);
+    setStatus(message);
+  }
+}
+
+async function rateMarketplaceSheet(id, rating) {
+  if (!state.auth.user) {
+    setMarketplaceStatus("Sign in to rate marketplace sheets");
+    setConverterMode("login");
+    return;
+  }
+
+  setMarketplaceStatus("Saving rating");
+  try {
+    const response = await fetch("/api/marketplace", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "rate", marketplaceId: id, rating })
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || "Rating failed");
+    const updated = payload.sheet;
+    state.marketplace.sheets = state.marketplace.sheets.map((sheet) => (
+      sheet.id === id
+        ? {
+          ...sheet,
+          averageRating: updated.averageRating,
+          ratingCount: updated.ratingCount,
+          myRating: updated.myRating
+        }
+        : sheet
+    ));
+    setMarketplaceStatus("Rating saved");
+    renderMarketplace();
+    fetchMarketplace({ silent: true });
+  } catch (error) {
+    const message = error.message || "Rating failed";
+    setMarketplaceStatus(message);
+    setStatus(message);
   }
 }
 
@@ -8104,7 +8445,7 @@ function loadLocalSheet() {
 
 function loadSheet() {
   if (state.auth.user) {
-    openCloudSaves();
+    openSavedSongs();
     return;
   }
   loadLocalSheet();
@@ -8152,10 +8493,16 @@ function syncControls() {
 }
 
 function setConverterMode(mode) {
-  const nextMode = ["landing", "login", "home", "audio", "score"].includes(mode) ? mode : "home";
+  const nextMode = ["landing", "login", "home", "audio", "score", "saved", "marketplace"].includes(mode) ? mode : "home";
   state.converterMode = nextMode;
-  document.body.classList.remove("view-landing", "view-login", "view-home", "view-audio", "view-score");
+  document.body.classList.remove("view-landing", "view-login", "view-home", "view-audio", "view-score", "view-saved", "view-marketplace");
   document.body.classList.add(`view-${nextMode}`);
+  [els.homeBtn, els.savedSongsBtn, els.marketplaceBtn].forEach((button) => {
+    if (button) button.classList.remove("active");
+  });
+  if (nextMode === "home" && els.homeBtn) els.homeBtn.classList.add("active");
+  if (nextMode === "saved" && els.savedSongsBtn) els.savedSongsBtn.classList.add("active");
+  if (nextMode === "marketplace" && els.marketplaceBtn) els.marketplaceBtn.classList.add("active");
   setAudioFinalExportMode(false);
 
   if (nextMode === "audio") {
@@ -8171,6 +8518,15 @@ function setConverterMode(mode) {
   } else if (nextMode === "score") {
     setStatus("Piano sheet to Sky sheet");
     document.body.classList.remove("audio-results-open");
+  } else if (nextMode === "saved") {
+    setStatus("Saved songs");
+    document.body.classList.remove("audio-results-open");
+    fetchCloudSaves({ silent: true });
+    renderSavedSongsPage();
+  } else if (nextMode === "marketplace") {
+    setStatus("Marketplace");
+    document.body.classList.remove("audio-results-open");
+    fetchMarketplace({ silent: true });
   } else {
     document.body.classList.remove("audio-results-open");
   }
@@ -8205,6 +8561,17 @@ function bindEvents() {
   els.chooseAudioBtn.addEventListener("click", () => setConverterMode("audio"));
   els.chooseScoreBtn.addEventListener("click", () => setConverterMode("score"));
   els.homeBtn.addEventListener("click", () => setConverterMode("home"));
+  els.savedSongsBtn.addEventListener("click", openSavedSongs);
+  els.marketplaceBtn.addEventListener("click", openMarketplace);
+  if (els.refreshSavedSongsBtn) {
+    els.refreshSavedSongsBtn.addEventListener("click", fetchCloudSaves);
+  }
+  if (els.refreshMarketplaceBtn) {
+    els.refreshMarketplaceBtn.addEventListener("click", () => fetchMarketplace());
+  }
+  if (els.marketplaceSearchInput) {
+    els.marketplaceSearchInput.addEventListener("input", scheduleMarketplaceSearch);
+  }
   [els.audioTabSheetsBtn, els.audioTabDetailsBtn, els.audioTabTimingBtn].forEach((button) => {
     if (!button) return;
     button.addEventListener("click", () => setAudioResultTab(button.dataset.audioTab));
@@ -8237,6 +8604,13 @@ function bindEvents() {
     analyzeAudioFile();
   });
   els.audioShowOutputBtn.addEventListener("click", openAudioResults);
+  if (els.audioRegenerateBtn) {
+    els.audioRegenerateBtn.addEventListener("click", () => {
+      syncControls();
+      setAudioWizardStep("sensitivity");
+      setAudioStatus("Adjust sliders and start checking again");
+    });
+  }
   if (els.audioPlayResultBtn) {
     els.audioPlayResultBtn.addEventListener("click", () => {
       openAudioResults();
@@ -8394,7 +8768,7 @@ function bindEvents() {
   els.authorInput.addEventListener("input", renderExport);
 
   document.addEventListener("keydown", (event) => {
-    if (state.converterMode === "landing" || state.converterMode === "login" || state.converterMode === "home") return;
+    if (state.converterMode === "landing" || state.converterMode === "login" || state.converterMode === "home" || state.converterMode === "saved" || state.converterMode === "marketplace") return;
     const target = event.target;
     if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return;
 

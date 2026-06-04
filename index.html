@@ -102,10 +102,38 @@
         </div>
         <div class="top-actions">
           <button id="homeBtn" class="ghost-button" type="button">Home</button>
+          <button id="savedSongsBtn" class="ghost-button" type="button">Saved songs</button>
+          <button id="marketplaceBtn" class="ghost-button" type="button">Marketplace</button>
           <button id="saveBtn" class="ghost-button" type="button">Save</button>
           <button id="loadBtn" class="ghost-button" type="button">Load</button>
         </div>
       </header>
+
+      <section id="savedSongsScreen" class="panel library-page saved-songs-screen" aria-labelledby="savedSongsTitle">
+        <div class="panel-heading">
+          <div>
+            <h2 id="savedSongsTitle">Saved songs</h2>
+            <p id="savedSongsStatus">Your private Cohesivity sheets live here.</p>
+          </div>
+          <button id="refreshSavedSongsBtn" class="ghost-button" type="button">Refresh</button>
+        </div>
+        <div id="savedSongsList" class="library-list"></div>
+      </section>
+
+      <section id="marketplaceScreen" class="panel library-page marketplace-screen" aria-labelledby="marketplaceTitle">
+        <div class="panel-heading marketplace-heading">
+          <div>
+            <h2 id="marketplaceTitle">Marketplace</h2>
+            <p id="marketplaceStatus">Shared Sky sheets from creators.</p>
+          </div>
+          <button id="refreshMarketplaceBtn" class="ghost-button" type="button">Refresh</button>
+        </div>
+        <label class="marketplace-search">
+          <span>Search sheets</span>
+          <input id="marketplaceSearchInput" type="search" placeholder="Search by sheet name">
+        </label>
+        <div id="marketplaceList" class="marketplace-list"></div>
+      </section>
 
       <main class="workspace">
         <nav id="audioResultTabs" class="audio-result-tabs" role="tablist" aria-label="Audio output sections">
@@ -315,8 +343,10 @@
             <p id="audioWizardKeyDescription">The selected Sky key will be shown here after analysis.</p>
             <div class="wizard-result-actions">
               <button id="audioShowOutputBtn" class="primary-button" type="button">Continue to final output</button>
+              <button id="audioRegenerateBtn" class="ghost-button" type="button">Regenerate</button>
               <button id="audioRestartWizardBtn" class="ghost-button" type="button">Use another audio</button>
             </div>
+            <p class="wizard-regenerate-note">Not satisfied? Try with different sliders.</p>
           </div>
         </section>
 

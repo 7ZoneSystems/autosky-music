@@ -61,6 +61,11 @@ async function routeApi(req, res, pathname) {
     return true;
   }
 
+  if (pathname === "/api/marketplace") {
+    await require("./api/marketplace")(req, apiResponse(res));
+    return true;
+  }
+
   if (pathname === "/api/mimo-refine") {
     await require("./api/mimo-refine")(req, apiResponse(res));
     return true;
