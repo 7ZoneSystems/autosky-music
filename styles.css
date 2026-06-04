@@ -168,6 +168,13 @@ body:not(.view-landing):not(.view-login):not(.view-home) .app-frame {
   transform: translateY(-1px);
 }
 
+.global-nav-button:disabled {
+  color: rgba(154, 168, 199, 0.42);
+  background: transparent;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .auth-login,
 .auth-user {
   min-height: 44px;
@@ -924,11 +931,13 @@ body:not(.view-audio) .audio-wizard-panel,
   overflow-x: auto;
 }
 
-#audioSheetRegenerateBtn {
+#audioSheetRegenerateBtn,
+#audioSheetGenerateNewBtn {
   display: none;
 }
 
-.view-audio.audio-results-open.audio-tab-sheets #audioSheetRegenerateBtn {
+.view-audio.audio-results-open.audio-tab-sheets #audioSheetRegenerateBtn,
+.view-audio.audio-results-open.audio-tab-sheets #audioSheetGenerateNewBtn {
   display: inline-flex;
 }
 

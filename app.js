@@ -271,10 +271,40 @@ KEY_CONFIGS.forEach((config) => {
   config.aliases.forEach((alias) => KEY_ALIASES.set(alias.toLowerCase(), config.id));
 });
 
+function createEmptyChordAnalysis() {
+  return {
+    fileName: "",
+    duration: 0,
+    keyGuess: null,
+    segments: [],
+    refinedText: "",
+    melodyNotes: [],
+    foregroundNotes: [],
+    backgroundNotes: [],
+    neuralNotes: [],
+    rhythmHits: [],
+    combinedEvents: [],
+    tempoEstimate: null,
+    tuning: null,
+    analysisProfile: "translator",
+    feelDensity: "balanced",
+    playability: "human",
+    enhancerMode: "threePhase",
+    enhancementSummary: null,
+    quality: null,
+    correctionSummary: null,
+    inputSignature: null,
+    wordingAssignments: []
+  };
+}
+
 const state = {
   converterMode: "landing",
   audioWizardStep: "file",
   audioResultTab: "sheets",
+  navigation: {
+    history: []
+  },
   auth: {
     loading: true,
     user: null,
@@ -308,30 +338,7 @@ const state = {
   bpm: 96,
   pending: [],
   events: [],
-  chordAnalysis: {
-    fileName: "",
-    duration: 0,
-    keyGuess: null,
-    segments: [],
-    refinedText: "",
-    melodyNotes: [],
-    foregroundNotes: [],
-    backgroundNotes: [],
-    neuralNotes: [],
-    rhythmHits: [],
-    combinedEvents: [],
-    tempoEstimate: null,
-    tuning: null,
-    analysisProfile: "translator",
-    feelDensity: "balanced",
-    playability: "human",
-    enhancerMode: "threePhase",
-    enhancementSummary: null,
-    quality: null,
-    correctionSummary: null,
-    inputSignature: null,
-    wordingAssignments: []
-  },
+  chordAnalysis: createEmptyChordAnalysis(),
   scoreAnalysis: {
     fileName: "",
     sourceType: "",
@@ -397,6 +404,7 @@ const els = {
   entryScreen: document.querySelector("#entryScreen"),
   chooseAudioBtn: document.querySelector("#chooseAudioBtn"),
   chooseScoreBtn: document.querySelector("#chooseScoreBtn"),
+  backBtn: document.querySelector("#backBtn"),
   homeBtn: document.querySelector("#homeBtn"),
   dashboardBtn: document.querySelector("#dashboardBtn"),
   savedSongsBtn: document.querySelector("#savedSongsBtn"),
@@ -444,6 +452,8 @@ const els = {
   audioShowOutputBtn: document.querySelector("#audioShowOutputBtn"),
   audioRegenerateBtn: document.querySelector("#audioRegenerateBtn"),
   audioSheetRegenerateBtn: document.querySelector("#audioSheetRegenerateBtn"),
+  audioGenerateNewBtn: document.querySelector("#audioGenerateNewBtn"),
+  audioSheetGenerateNewBtn: document.querySelector("#audioSheetGenerateNewBtn"),
   audioPlayResultBtn: document.querySelector("#audioPlayResultBtn"),
   audioRestartWizardBtn: document.querySelector("#audioRestartWizardBtn"),
   audioResultTabs: document.querySelector("#audioResultTabs"),
@@ -731,6 +741,13 @@ function renderAuth() {
   renderDashboard();
 }
 
+function renderNavigationState() {
+  if (!els.backBtn) return;
+  const hasBackPage = state.navigation.history.length > 0;
+  els.backBtn.disabled = !hasBackPage;
+  els.backBtn.setAttribute("aria-disabled", hasBackPage ? "false" : "true");
+}
+
 async function loadAuthUser() {
   renderAuth();
   try {
@@ -781,6 +798,15 @@ function handleTryItOut() {
 
   state.auth.pendingToolEntry = true;
   setConverterMode("login");
+}
+
+function goBackPage() {
+  const previousMode = state.navigation.history.pop();
+  if (!previousMode) {
+    renderNavigationState();
+    return;
+  }
+  setConverterMode(previousMode, { track: false });
 }
 
 function continueWithGoogleFromGate() {
@@ -3444,6 +3470,31 @@ function reopenAudioRegenerationControls() {
   setAudioFinalExportMode(false);
   setAudioWizardStep("sensitivity");
   setAudioStatus("Adjust sliders and start checking again");
+}
+
+function startNewAudioGeneration() {
+  stopPlayback();
+  state.events = [];
+  state.pending = [];
+  state.cloud.activeSheetId = null;
+  state.chordAnalysis = createEmptyChordAnalysis();
+  renderedPlaybackCache = null;
+
+  if (els.audioWizardFileInput) els.audioWizardFileInput.value = "";
+  if (els.audioFileInput) els.audioFileInput.value = "";
+  if (els.titleInput) els.titleInput.value = "Untitled Sky Sheet";
+  if (els.authorInput) els.authorInput.value = "";
+  if (els.wizardAutoBpmInput) els.wizardAutoBpmInput.checked = true;
+  if (els.wizardAutoKeyInput) els.wizardAutoKeyInput.checked = true;
+
+  document.body.classList.remove("audio-results-open");
+  setAudioFinalExportMode(false);
+  setAudioResultTab("sheets");
+  syncControls();
+  renderAll();
+  setAudioWizardStep("file");
+  setAudioStatus("No MP3 loaded");
+  setStatus("Ready for new audio");
 }
 
 function wizardProgressForStatus(text) {
@@ -9599,8 +9650,13 @@ function syncControls() {
   if (els.wizardEnhancerSelect && els.enhancerSelect) els.wizardEnhancerSelect.value = els.enhancerSelect.value;
 }
 
-function setConverterMode(mode) {
+function setConverterMode(mode, options = {}) {
   const nextMode = ["landing", "login", "home", "dashboard", "audio", "score", "saved", "marketplace"].includes(mode) ? mode : "dashboard";
+  const previousMode = state.converterMode;
+  if (options.track !== false && previousMode && previousMode !== nextMode) {
+    state.navigation.history.push(previousMode);
+    if (state.navigation.history.length > 30) state.navigation.history.shift();
+  }
   state.converterMode = nextMode;
   document.body.classList.remove("view-landing", "view-login", "view-home", "view-dashboard", "view-audio", "view-score", "view-saved", "view-marketplace");
   document.body.classList.add(`view-${nextMode}`);
@@ -9611,6 +9667,7 @@ function setConverterMode(mode) {
   if (nextMode === "dashboard" && els.dashboardBtn) els.dashboardBtn.classList.add("active");
   if (nextMode === "saved" && els.savedSongsBtn) els.savedSongsBtn.classList.add("active");
   if (nextMode === "marketplace" && els.marketplaceBtn) els.marketplaceBtn.classList.add("active");
+  renderNavigationState();
   setAudioFinalExportMode(false);
 
   if (nextMode === "audio") {
@@ -9673,6 +9730,9 @@ function bindEvents() {
   els.loginGateGuestBtn.addEventListener("click", continueWithoutLogin);
   els.chooseAudioBtn.addEventListener("click", () => setConverterMode("audio"));
   els.chooseScoreBtn.addEventListener("click", () => setConverterMode("score"));
+  if (els.backBtn) {
+    els.backBtn.addEventListener("click", goBackPage);
+  }
   els.homeBtn.addEventListener("click", () => setConverterMode("landing"));
   els.dashboardBtn.addEventListener("click", openDashboard);
   if (els.refreshDashboardBtn) {
@@ -9781,6 +9841,12 @@ function bindEvents() {
   if (els.audioSheetRegenerateBtn) {
     els.audioSheetRegenerateBtn.addEventListener("click", reopenAudioRegenerationControls);
   }
+  if (els.audioGenerateNewBtn) {
+    els.audioGenerateNewBtn.addEventListener("click", startNewAudioGeneration);
+  }
+  if (els.audioSheetGenerateNewBtn) {
+    els.audioSheetGenerateNewBtn.addEventListener("click", startNewAudioGeneration);
+  }
   if (els.audioPlayResultBtn) {
     els.audioPlayResultBtn.addEventListener("click", () => {
       openAudioResults();
@@ -9789,14 +9855,7 @@ function bindEvents() {
     });
   }
   els.audioRestartWizardBtn.addEventListener("click", () => {
-    document.body.classList.remove("audio-results-open");
-    if (els.audioWizardFileInput) els.audioWizardFileInput.value = "";
-    if (els.audioFileInput) els.audioFileInput.value = "";
-    if (els.wizardAutoBpmInput) els.wizardAutoBpmInput.checked = true;
-    if (els.wizardAutoKeyInput) els.wizardAutoKeyInput.checked = true;
-    syncControls();
-    setAudioWizardStep("file");
-    setAudioStatus("No MP3 loaded");
+    startNewAudioGeneration();
   });
 
   els.keySelect.addEventListener("change", () => {
@@ -9984,6 +10043,7 @@ function init() {
   syncControls();
   setAudioResultTab("sheets");
   bindEvents();
+  renderNavigationState();
   renderAll();
   handleInitialMarketplaceLink();
   loadAuthUser();

@@ -20,6 +20,13 @@
     </div>
 
     <nav class="global-nav" aria-label="Primary navigation">
+      <button id="backBtn" class="global-nav-button global-back-button" type="button" aria-label="Go back" disabled>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M11 5.5 4.5 12l6.5 6.5"></path>
+          <path d="M5 12h15"></path>
+        </svg>
+        <span>Back</span>
+      </button>
       <button id="homeBtn" class="global-nav-button" type="button" aria-label="Home">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M3.5 11.2 12 4l8.5 7.2"></path>
@@ -321,6 +328,7 @@
               <button id="stopBtn" class="ghost-button" type="button">Stop</button>
               <button id="liveStudioBtn" class="ghost-button live-studio-action" type="button">Live studio</button>
               <button id="audioSheetRegenerateBtn" class="ghost-button" type="button">Regenerate</button>
+              <button id="audioSheetGenerateNewBtn" class="ghost-button" type="button">Generate new</button>
             </div>
           </div>
 
@@ -477,6 +485,7 @@
             <div class="wizard-result-actions">
               <button id="audioShowOutputBtn" class="primary-button" type="button">Continue to final output</button>
               <button id="audioRegenerateBtn" class="ghost-button" type="button">Regenerate</button>
+              <button id="audioGenerateNewBtn" class="ghost-button" type="button">Generate new</button>
               <button id="audioRestartWizardBtn" class="ghost-button" type="button">Use another audio</button>
             </div>
             <p class="wizard-regenerate-note">Not satisfied? Try with different sliders.</p>
