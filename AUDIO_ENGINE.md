@@ -105,15 +105,8 @@ cross-checks, but the cache is the main alignment point.
 
 Analysis profile:
 
-- `Song translator`: default profile for audio-to-playable-Sky-piano
-  translation. It uses the shared frequency cache as the primary evidence
-  source.
-- `Balanced`: shorter windows and larger batches for faster analysis.
-- `Long song`: slower profile for 4-5 minute songs.
-- `Beast`: denser chord probes, rhythm hops, and piano frames. Slower, more
-  detailed, and better for busy covers.
-- `Neural lattice`: optional legacy dense lattice pass. It is no longer the
-  default because the translator path better matches playable piano output.
+- `Song translator`: the only exposed audio mode. It translates full-song
+  frequency evidence into a playable Sky piano reduction.
 
 Feel density:
 
@@ -275,11 +268,12 @@ Why pre-emphasis helps:
 - it makes pitch transitions more visible to the melody tracker;
 - it helps with voice/tune extraction in busy mixes.
 
-## Phase 2: Analysis Profiles
+## Phase 2: Song Translator Profile
 
 Function: `analysisProfileSettings`.
 
-Profiles tune batch sizes, hop sizes, chord probes, and piano frame sizes.
+The single profile tunes batch sizes, hop sizes, chord probes, and piano frame
+sizes.
 
 `Song translator`:
 
@@ -299,69 +293,10 @@ translatorChordSensitivity: 0.48
 selfCorrectPasses: 2
 ```
 
-`Balanced`:
+The profile keeps the translator path deterministic. It changes no user-facing
+mode names and remains the only audio decoding template.
 
-```text
-melodyHopLength: 384
-melodyBatchSize: 24
-chordProbeRatios: [0.35, 0.65]
-chordBatchSize: 6
-rhythmHopLength: 320
-rhythmBatchSize: 64
-pianoFrameLength: 2048
-pianoHopLength: 1024
-pianoBatchSize: 6
-```
-
-`Long song`:
-
-```text
-melodyHopLength: 512
-melodyBatchSize: 30
-chordProbeRatios: [0.22, 0.5, 0.78]
-chordBatchSize: 5
-rhythmHopLength: 256
-rhythmBatchSize: 70
-pianoFrameLength: 4096
-pianoHopLength: 1536
-pianoBatchSize: 5
-```
-
-`Beast`:
-
-```text
-melodyHopLength: 256
-melodyBatchSize: 14
-chordProbeRatios: [0.16, 0.33, 0.5, 0.67, 0.84]
-chordBatchSize: 3
-rhythmHopLength: 192
-rhythmBatchSize: 46
-pianoFrameLength: 4096
-pianoHopLength: 768
-pianoBatchSize: 4
-```
-
-`Neural lattice`:
-
-```text
-melodyHopLength: 192
-melodyBatchSize: 10
-chordProbeRatios: [0.12, 0.25, 0.38, 0.5, 0.62, 0.75, 0.88]
-chordBatchSize: 2
-rhythmHopLength: 160
-rhythmBatchSize: 36
-pianoFrameLength: 4096
-pianoHopLength: 512
-pianoBatchSize: 3
-neuralMaxFrameNotes: 8
-neuralSensitivity: 0.26
-selfCorrectPasses: 2
-```
-
-The profile changes resolution, scheduling, and how aggressive the translator
-cache, optional lattice, and self-correction passes are.
-
-Longer or denser analysis means:
+The translator settings mean:
 
 - more browser work;
 - more frame-level detail;
@@ -475,9 +410,7 @@ inside the window.
 
 Examples:
 
-- Balanced probes at 35 percent and 65 percent.
-- Long song probes at 22 percent, 50 percent, and 78 percent.
-- Beast probes at 16, 33, 50, 67, and 84 percent.
+- Song translator probes at 18, 34, 50, 66, and 82 percent.
 
 Each probe:
 
@@ -559,11 +492,9 @@ MELODY_MIN_SECONDS = 0.12
 MELODY_JOIN_GAP_SECONDS = 0.13
 ```
 
-Profile controls the hop length:
+Song translator controls the hop length:
 
-- Balanced: 384 samples;
-- Long song: 512 samples;
-- Beast: 256 samples.
+- melody hop length: 256 samples.
 
 ### Pitch Detection
 
@@ -850,10 +781,9 @@ onset-strength storage.
 `buildNeuralChordFrames` reads the resulting MIDI notes inside each chord
 window and calls the same pitch-set chord detector used by score import.
 
-`fuseAudioChordSegments` now primarily compares chroma chords against
-translator cache chords. If the user selects `Neural lattice`, dense
-note-derived chords can also participate. This prevents blank chord output
-without making the lattice the default.
+`fuseAudioChordSegments` compares chroma chords against translator cache
+chords. This prevents blank chord output without exposing separate engine
+templates.
 
 ## Phase 9: Melody Source Fusion
 
@@ -864,7 +794,7 @@ The engine compares:
 - YIN melody notes;
 - song-translator lead notes;
 - piano foreground notes;
-- optional neural-lattice foreground notes.
+- recovery foreground notes.
 
 It calculates coverage for each source:
 
@@ -881,8 +811,8 @@ Rules:
   from the other sources.
 - Theme-marked piano notes with confidence above `0.38` can be added even when
   some overlap exists.
-- `mergeMelodyWithNeuralForeground` is now only used for the optional
-  `Neural lattice` profile.
+- recovery foreground notes remain internal evidence and are not exposed as a
+  separate engine profile.
 
 Then the engine:
 
@@ -1271,10 +1201,11 @@ Main functions:
 - `getAudioGraph`;
 - `createSkyPianoSample`;
 - `getSkyPianoSample`;
+- `uniquePlaybackButtonIds`;
+- `precachePlaybackSamples`;
 - `playTone`;
 - `playButton`;
-- `playSheet`;
-- `playbackGateForEvent`.
+- `playSheet`.
 
 Playback is separate from audio analysis. It turns sheet events into generated
 Web Audio notes.
@@ -1287,7 +1218,8 @@ The current preset is intentionally dry and piano-like:
 - no vibrato;
 - no random pitch detune;
 - no random reverb or delay;
-- no long synth pad tail.
+- no hold-synth pad tail;
+- no event-duration tail chopping.
 
 ### Shared Audio Graph
 
@@ -1320,54 +1252,93 @@ This keeps chords from clipping while avoiding a big artificial effect.
 Duration depends on pitch:
 
 ```text
-> 1200 Hz: 1.15 seconds
->  700 Hz: 1.42 seconds
-else     : 1.68 seconds
+> 1200 Hz: 1.90 seconds
+>  700 Hz: 2.35 seconds
+else     : 2.85 seconds
 ```
 
 Envelope:
 
-- attack: `0.0045` seconds;
-- fade out: final `0.08` seconds;
+- attack: `0.0038` seconds;
+- fade out: final `0.12` seconds;
 - lower notes decay slower than high notes.
 
 Partial structure:
 
 ```text
-fundamental: 0.82
-octave:      0.105
-third:       0.026
-hammerTone:  0.012
+fundamental body: 0.66
+fundamental tail: 0.16
+octave:           0.082
+third:            0.018
+hammerTone:       0.016
 ```
 
-The sample is normalized to a peak of `0.68` and copied identically to both
+The sample is normalized to a peak of `0.64` and copied identically to both
 stereo channels. That keeps the tone centered and avoids phase weirdness in
 chords.
 
 ### Event Playback
 
-`playSheet` schedules note events from `state.events`.
+`playSheet` converts `state.events` into a pre-rendered audio buffer before
+sound playback starts.
 
-For each note event:
+Before rendering starts, it calls `precachePlaybackSamples`:
+
+1. Scan the sheet for unique note button ids.
+2. Resolve each id to the selected Sky key frequency.
+3. Warm the shared playback graph.
+4. Generate any missing `AudioBuffer` samples in `skyPianoSampleCache`.
+5. Yield to `requestAnimationFrame` every few notes so the browser can paint.
+6. Continue only after the required note buffers are ready.
+
+The playback cache key includes sample rate, selected Sky key, BPM, and the
+sheet event signature. If those inputs have not changed, Play reuses the
+already-rendered full-sheet buffer.
+
+When a new render is needed, `renderSheetAudioBuffer` creates an
+`OfflineAudioContext`, schedules every note into that offline context, and
+stores the finished buffer in memory. Runtime playback then starts a single
+`AudioBufferSourceNode`; it no longer depends on live per-note audio scheduling
+for sound.
+
+For each note during offline rendering:
 
 1. Convert beat duration to seconds using current BPM.
-2. Read the event gate from enhancer metadata when present.
-3. Clamp gate if needed with `playbackGateForEvent`.
-4. Scale chord gain by note count:
+2. Scale chord gain by note count:
 
 ```text
 chordLevel = min(0.92, 1 / noteCount^0.45)
 ```
 
-5. Schedule every button at the same cursor time.
-6. Flash matching UI keys.
-7. Advance the cursor by the full event duration.
+3. Place every chord button at the same offline cursor time.
+4. Render the complete sample tail into the sheet buffer.
+5. Advance the cursor by the full event duration.
 
-The generated sample itself is allowed to ring out. The gate controls intended
-articulation and scheduling, while the dry sample tail keeps notes from ending
-too abruptly.
+The generated sample itself is allowed to ring out. Event duration controls
+timeline spacing, not note cutoff. Rests render no new button, but previous
+notes continue their natural decay. Consecutive notes overlap as one-shot Sky
+piano strikes instead of cutting each other off.
 
-## Phase 15: MiMo Refinement
+Timeline highlighting and key flashes are still scheduled as lightweight visual
+timers. If those timers drift under browser load, the already-rendered audio
+continues without stutter or missing notes.
+
+## Phase 15: Timed Sheet Export
+
+The `Timed JSON` export format preserves performance timing:
+
+- title and transcriber;
+- selected Sky key id, label, and setup;
+- BPM and seconds per beat;
+- default manual duration;
+- total beat and second length;
+- every event's start beat, start second, duration, and end time;
+- note button id, ABC label, Sky note name, and playback frequency.
+
+This export is meant for round-tripping timing into external tools or debugging
+why a sheet plays with certain gaps.
+
+## Phase 16: MiMo Refinement
 
 Main functions:
 
@@ -1508,7 +1479,7 @@ Important choices:
 - density-specific combined event caps;
 - MiMo prompt lines capped to avoid huge server requests.
 
-The slowest normal profile is `Song translator` because:
+The Song translator profile is intentionally thorough because:
 
 - melody hop is smaller;
 - rhythm hop is smaller;
@@ -1522,14 +1493,14 @@ The slowest normal profile is `Song translator` because:
 
 For simple melody songs:
 
-- use `Balanced` or `Long song`;
+- use `Song translator`;
 - use `Import melody`;
 - lower feel density if combined output is too busy;
 - use auto tune after analysis.
 
 For dense piano covers:
 
-- use `Beast`;
+- use `Song translator`;
 - use `Full` or `Balanced` feel density;
 - inspect foreground/background tracks;
 - import combined;
@@ -1581,7 +1552,7 @@ user separate melody, chord, rhythm, background, and combined outputs.
 
 Possible next upgrades:
 
-- add a Web Worker for analysis loops so UI remains smoother during Beast mode;
+- add a Web Worker for analysis loops so UI remains smoother during translation;
 - use an FFT library for faster multi-bin spectral analysis;
 - add optional WASM resampling;
 - add optional neural source separation on a backend;
@@ -1722,7 +1693,6 @@ Playback:
 - `getSkyPianoSample`;
 - `playTone`;
 - `playButton`;
-- `playbackGateForEvent`;
 - `playSheet`;
 - `stopPlayback`.
 

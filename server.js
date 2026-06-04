@@ -36,6 +36,26 @@ function apiResponse(res) {
 }
 
 async function routeApi(req, res, pathname) {
+  if (pathname === "/api/auth/login") {
+    await require("./api/auth/login")(req, apiResponse(res));
+    return true;
+  }
+
+  if (pathname === "/api/auth/callback") {
+    await require("./api/auth/callback")(req, apiResponse(res));
+    return true;
+  }
+
+  if (pathname === "/api/auth/user") {
+    await require("./api/auth/user")(req, apiResponse(res));
+    return true;
+  }
+
+  if (pathname === "/api/auth/logout") {
+    await require("./api/auth/logout")(req, apiResponse(res));
+    return true;
+  }
+
   if (pathname === "/api/mimo-refine") {
     await require("./api/mimo-refine")(req, apiResponse(res));
     return true;

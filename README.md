@@ -16,9 +16,11 @@ Static composing, local MP3 analysis, direct MusicXML/JSON/text score imports, a
 
 For MXL score import locally, keep `npm run dev` running because MXL unzip uses `/api/sheet-omr`. PNG/JPG/PDF score import is read by the browser's local vision pipeline.
 
+For Google login locally, the app reads `tenant_id` from `.cohesivity` or `COHESIVITY_TENANT_ID` from `.env`. Cohesivity login is already provisioned for localhost ports 5173-5175 with callback path `/api/auth/callback`.
+
 The build creates a generated `public/` directory for Vercel from the root static files. `public/` is ignored by Git.
 
-For local testing, the Node server serves the static app and both API routes. `/api/mimo-refine` loads `.env` directly when it is not running in Vercel production. Existing shell environment variables take priority over `.env` values.
+For local testing, the Node server serves the static app and API routes. `/api/mimo-refine` loads `.env` directly when it is not running in Vercel production. Existing shell environment variables take priority over `.env` values.
 
 ## Vercel Environment Variables
 
@@ -28,6 +30,8 @@ Set these in Vercel Project Settings -> Environment Variables:
 - `MIMO_BASE_URL`: optional. Defaults to `https://token-plan-sgp.xiaomimimo.com/anthropic`.
 - `MIMO_MESSAGES_URL`: optional exact endpoint override. Use this if a custom gateway does not follow the normal `/v1/messages` path.
 - `MIMO_MODEL`: optional. Defaults to `mimo-v2.5`.
+- `COHESIVITY_TENANT_ID`: required for Google login on Vercel. Current generated tenant: `calm-salmon-dealing`.
+- `COHESIVITY_ORIGIN`: optional. Defaults to `https://cohesivity.ai`.
 
 ## What It Uses
 
@@ -35,8 +39,10 @@ Set these in Vercel Project Settings -> Environment Variables:
 - The grid spans two octaves of a major scale.
 - The active key is controlled by a selected music sheet or the current background music key.
 - This app stores the 12 Sky major-key layouts: C, C#/Db, D, D#/Eb, E, F, F#/Gb, G, G#/Ab, A, A#/Bb, and B.
+- The first screen is an animated dark piano-note landing page; `Try it out` opens the two-option Audio to Sky sheet or Piano sheet to Sky sheet chooser.
+- The audio workflow is a guided wizard: attach audio, set melody/chord sensitivity, set feel/playability/auto BPM/auto key/timing, review the selected Sky key, then open a tabbed final page with SHEETS, Details, and Timing details.
 - `Cb` is treated as the practical enharmonic alias of B major, while the F#/Gb layout includes the `Cb` scale degree used in Sky's flat-key table.
-- The app exports common Sky sheet notation: `A1` through `C5`, 1-15 button numbers, note names, and JSON.
+- The app exports common Sky sheet notation: `A1` through `C5`, 1-15 button numbers, note names, JSON, and timed JSON with BPM, beat timing, second timing, key, and per-note frequencies.
 - Traditional score import accepts MusicXML/XML, JSON, text note names, MXL, images, and PDFs. MusicXML/JSON/text are parsed locally; MXL is unzipped by `/api/sheet-omr`; PNG/JPG/PDF pages are read by a local browser vision OMR pass.
 - Visual score import now runs a complex-page classifier: it detects grand-staff systems, estimates notehead/stem/beam shape, groups simultaneous cross-staff onsets, counts dense piano chord stacks, classifies texture such as melody + accompaniment or piano chordal, and shows those stats in the score panel.
 - Score import reads the full detected score, chooses the best Sky key unless told to keep the current key, estimates or uses BPM, separates melody/background, identifies chord names including common inversions, maps unavailable chromatic notes to nearest or color-pair Sky buttons, and splits dense piano chords into alternating playable gestures.
@@ -56,13 +62,8 @@ Set these in Vercel Project Settings -> Environment Variables:
 - Complex piano covers no longer depend only on the dominant-pitch tracker. If voice-style melody tracking is sparse, the app falls back to salience-based foreground piano contours and background accompaniment pulses.
 - Foreground/theme and background pulse tracks are shown separately before the final combined sheet, so dense piano covers can be inspected without losing the arrangement context.
 - The audio panel reports an input/output match score and a self-correction count after MP3 analysis.
-- Playback is locked to a dry generated Sky-piano-style preset: fixed-duration piano notes, exact pitch, no vibrato, no random reverb/delay, no bell/harp/hold-synth preset, and chord gain scaling. It does not bundle extracted official game samples.
-- Engine profile controls:
-  - `Song translator`: default profile for audio-to-playable-Sky-piano translation. It uses the shared frequency cache as the main evidence source.
-  - `Balanced`: faster analysis for short/medium songs.
-  - `Long song`: default profile for 4-5 minute MP3s.
-  - `Beast`: denser melody/rhythm frames and more chord probes; slower but better for complex mixes.
-  - `Neural lattice`: optional legacy dense lattice pass. It is no longer the default because the song translator is better aligned with playable piano arrangement.
+- Playback is locked to a dry generated Sky-piano-style preset: struck one-shot piano notes, exact pitch, natural decay tails through rests, pre-rendered full-sheet audio on Play, no vibrato, no random reverb/delay, no bell/harp/hold-synth preset, and chord gain scaling. It does not bundle extracted official game samples.
+- The audio engine exposes one mode: `Song translator` for audio-to-playable-Sky-piano translation. It uses the shared frequency cache as the main evidence source.
 - Feel density controls how much harmony/rhythm is injected into the combined sheet: sparse, balanced, or full.
 - Playability controls how many Sky keys the combined translator may use at once: simple 1-key, human 2-key, balanced 3-key, or rich 4-key. Human 2-key is the default so song translation favors melody plus one nearby support tone instead of dense automatic clusters.
 - The timing enhancer is a three-phase sheet cleanup pass:
@@ -79,8 +80,13 @@ Set these in Vercel Project Settings -> Environment Variables:
 
 The audio engine and visual score reader run locally. Xiaomi MiMo is called by `/api/mimo-refine` only for optional chord text/playability cleanup. The route reads `MIMO_API_KEY` from server-side environment variables, so the key is never shipped to the browser. The refine route defaults to `https://token-plan-sgp.xiaomimimo.com/anthropic/v1/messages`.
 
+## Cohesivity Login Note
+
+Google login uses Cohesivity social-login. The browser starts at `/api/auth/login`, Cohesivity redirects back to `/api/auth/callback` with tokens, and the server stores those tokens as httpOnly SameSite=Lax cookies. `/api/auth/user` verifies or refreshes the session through Cohesivity, and `/api/auth/logout` clears the local cookies and revokes the refresh token.
+
 ## Sources Checked
 
+- Cohesivity social-login offering docs: https://cohesivity.ai/offerings/social-login
 - Official Sky Help Center, Music Sheets: https://thatgamecompany.helpshift.com/hc/en/17-sky-children-of-the-light/faq/1345-how-do-i-use-music-sheets-in-sky/?l=en
 - Sky Wiki, Instruments: https://sky-children-of-the-light.fandom.com/wiki/Instruments
 - Sky Wiki, Music Key: https://sky-children-of-the-light.fandom.com/wiki/Music_Key

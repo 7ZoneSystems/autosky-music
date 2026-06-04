@@ -266,6 +266,15 @@ KEY_CONFIGS.forEach((config) => {
 });
 
 const state = {
+  converterMode: "landing",
+  audioWizardStep: "file",
+  audioResultTab: "sheets",
+  auth: {
+    loading: true,
+    user: null,
+    menuOpen: false,
+    error: null
+  },
   keyId: "C",
   notation: "abc",
   chordMode: false,
@@ -327,6 +336,44 @@ const state = {
 };
 
 const els = {
+  authShell: document.querySelector("#authShell"),
+  authLoginBtn: document.querySelector("#authLoginBtn"),
+  authUserBtn: document.querySelector("#authUserBtn"),
+  authAvatar: document.querySelector("#authAvatar"),
+  authUserName: document.querySelector("#authUserName"),
+  authMenu: document.querySelector("#authMenu"),
+  authMenuHomeBtn: document.querySelector("#authMenuHomeBtn"),
+  authLogoutBtn: document.querySelector("#authLogoutBtn"),
+  landingScreen: document.querySelector("#landingScreen"),
+  tryItOutBtn: document.querySelector("#tryItOutBtn"),
+  entryScreen: document.querySelector("#entryScreen"),
+  chooseAudioBtn: document.querySelector("#chooseAudioBtn"),
+  chooseScoreBtn: document.querySelector("#chooseScoreBtn"),
+  homeBtn: document.querySelector("#homeBtn"),
+  audioWizardPanel: document.querySelector("#audioWizardPanel"),
+  audioWizardFileInput: document.querySelector("#audioWizardFileInput"),
+  wizardMelodySensitivityInput: document.querySelector("#wizardMelodySensitivityInput"),
+  wizardChordSensitivityInput: document.querySelector("#wizardChordSensitivityInput"),
+  audioSensitivityNextBtn: document.querySelector("#audioSensitivityNextBtn"),
+  wizardFeelDensitySelect: document.querySelector("#wizardFeelDensitySelect"),
+  wizardPlayabilitySelect: document.querySelector("#wizardPlayabilitySelect"),
+  wizardBpmInput: document.querySelector("#wizardBpmInput"),
+  wizardAutoBpmInput: document.querySelector("#wizardAutoBpmInput"),
+  wizardAutoKeyInput: document.querySelector("#wizardAutoKeyInput"),
+  wizardEnhancerSelect: document.querySelector("#wizardEnhancerSelect"),
+  audioWizardAnalyzeBtn: document.querySelector("#audioWizardAnalyzeBtn"),
+  audioWizardProgressFill: document.querySelector("#audioWizardProgressFill"),
+  audioWizardStageText: document.querySelector("#audioWizardStageText"),
+  audioWizardTipText: document.querySelector("#audioWizardTipText"),
+  audioWizardKeyTitle: document.querySelector("#audioWizardKeyTitle"),
+  audioWizardKeyDescription: document.querySelector("#audioWizardKeyDescription"),
+  audioShowOutputBtn: document.querySelector("#audioShowOutputBtn"),
+  audioPlayResultBtn: document.querySelector("#audioPlayResultBtn"),
+  audioRestartWizardBtn: document.querySelector("#audioRestartWizardBtn"),
+  audioResultTabs: document.querySelector("#audioResultTabs"),
+  audioTabSheetsBtn: document.querySelector("#audioTabSheetsBtn"),
+  audioTabDetailsBtn: document.querySelector("#audioTabDetailsBtn"),
+  audioTabTimingBtn: document.querySelector("#audioTabTimingBtn"),
   keySelect: document.querySelector("#keySelect"),
   notationSelect: document.querySelector("#notationSelect"),
   durationSelect: document.querySelector("#durationSelect"),
@@ -359,6 +406,8 @@ const els = {
   importAbcBtn: document.querySelector("#importAbcBtn"),
   importNumbersBtn: document.querySelector("#importNumbersBtn"),
   exportFormat: document.querySelector("#exportFormat"),
+  exportTitle: document.querySelector("#exportTitle"),
+  exportSubtitle: document.querySelector("#exportSubtitle"),
   exportText: document.querySelector("#exportText"),
   copyExportBtn: document.querySelector("#copyExportBtn"),
   audioFileInput: document.querySelector("#audioFileInput"),
@@ -397,6 +446,8 @@ const els = {
   rhythmResultList: document.querySelector("#rhythmResultList"),
   foregroundOutputText: document.querySelector("#foregroundOutputText"),
   backgroundOutputText: document.querySelector("#backgroundOutputText"),
+  foregroundResultList: document.querySelector("#foregroundResultList"),
+  backgroundResultList: document.querySelector("#backgroundResultList"),
   combinedOutputText: document.querySelector("#combinedOutputText"),
   combinedResultList: document.querySelector("#combinedResultList"),
   wordingInputText: document.querySelector("#wordingInputText"),
@@ -431,7 +482,18 @@ let activeOscillators = [];
 let audioGraph = null;
 let playbackScheduler = null;
 let playbackSessionId = 0;
+let activePlaybackSource = null;
+let renderedPlaybackCache = null;
 const skyPianoSampleCache = new Map();
+const AUDIO_WIZARD_TIPS = [
+  "Sky music tip: leave space between phrases so the 15-button grid can breathe.",
+  "For vocal songs, melody sensitivity decides how strongly the lead line is followed.",
+  "Human 2-key playability usually sounds cleaner for real Sky performances.",
+  "Balanced feel keeps rhythm support without filling every beat.",
+  "Auto tune can help after analysis if the melody feels shifted from the Sky key.",
+  "Combined import is for song feel; melody import is cleaner for simple tunes.",
+  "Timing enhancer shapes rests and note lengths so fast parts do not feel random."
+];
 
 function currentConfig() {
   return KEY_CONFIGS.find((config) => config.id === state.keyId) || KEY_CONFIGS[0];
@@ -512,6 +574,87 @@ function setStatus(text) {
   els.statusText.textContent = text;
 }
 
+function authDisplayName(user) {
+  return (user && (user.name || user.email)) || "Google account";
+}
+
+function fallbackAvatar(name) {
+  const initial = (name || "S").trim().charAt(0).toUpperCase() || "S";
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96"><rect width="96" height="96" rx="48" fill="#16233f"/><circle cx="48" cy="44" r="30" fill="#73a7ff" opacity=".34"/><text x="48" y="59" text-anchor="middle" font-family="Arial,sans-serif" font-size="34" font-weight="800" fill="#fff">${initial}</text></svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+function renderAuth() {
+  if (!els.authShell) return;
+  const user = state.auth.user;
+  const signedIn = Boolean(user);
+  els.authShell.dataset.authState = state.auth.loading ? "loading" : signedIn ? "signed-in" : "signed-out";
+  els.authLoginBtn.hidden = signedIn;
+  els.authLoginBtn.disabled = state.auth.loading || Boolean(state.auth.error);
+  els.authLoginBtn.textContent = state.auth.loading
+    ? "Checking login"
+    : state.auth.error
+      ? "Login unavailable"
+      : "Login with Google";
+  els.authUserBtn.hidden = !signedIn;
+  els.authMenu.hidden = !signedIn || !state.auth.menuOpen;
+  els.authUserBtn.setAttribute("aria-expanded", signedIn && state.auth.menuOpen ? "true" : "false");
+
+  if (!signedIn) return;
+  const name = authDisplayName(user);
+  els.authUserName.textContent = name;
+  els.authAvatar.src = user.picture || fallbackAvatar(name);
+  els.authAvatar.alt = "";
+  els.authUserBtn.title = user.email ? `${name} (${user.email})` : name;
+}
+
+async function loadAuthUser() {
+  renderAuth();
+  try {
+    const response = await fetch("/api/auth/user", { credentials: "same-origin" });
+    const data = await response.json();
+    state.auth.user = data.user || null;
+    state.auth.error = data.configured === false ? "Cohesivity tenant not configured" : data.error || null;
+  } catch (error) {
+    state.auth.user = null;
+    state.auth.error = error && error.message ? error.message : "Auth unavailable";
+  } finally {
+    state.auth.loading = false;
+    state.auth.menuOpen = false;
+    renderAuth();
+  }
+}
+
+function startLogin() {
+  if (state.auth.loading || state.auth.error) return;
+  const currentUrl = new URL(window.location.href);
+  currentUrl.searchParams.delete("auth_error");
+  const returnTo = `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`;
+  window.location.href = `/api/auth/login?return_to=${encodeURIComponent(returnTo || "/")}`;
+}
+
+async function logoutAuth() {
+  state.auth.loading = true;
+  state.auth.menuOpen = false;
+  renderAuth();
+  try {
+    await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" });
+  } catch {
+    // Local UI should still clear when the browser cannot reach the logout endpoint.
+  }
+  state.auth.user = null;
+  state.auth.error = null;
+  state.auth.loading = false;
+  renderAuth();
+  setStatus("Logged out");
+}
+
+function closeAuthMenu() {
+  if (!state.auth.menuOpen) return;
+  state.auth.menuOpen = false;
+  renderAuth();
+}
+
 function renderKeyOptions() {
   els.keySelect.innerHTML = "";
   KEY_CONFIGS.forEach((config) => {
@@ -590,7 +733,24 @@ function makeMiniGrid(notes) {
   return mini;
 }
 
-function renderTimeline(activeIndex = -1) {
+function scrollTimelineToActiveTile(tile) {
+  if (!tile || !els.timeline) return;
+  const timeline = els.timeline;
+  const tileTop = tile.offsetTop;
+  const tileBottom = tileTop + tile.offsetHeight;
+  const viewTop = timeline.scrollTop;
+  const viewBottom = viewTop + timeline.clientHeight;
+  const padding = 28;
+  if (tileTop >= viewTop + padding && tileBottom <= viewBottom - padding) return;
+
+  const targetTop = Math.max(0, tileTop - Math.max(0, (timeline.clientHeight - tile.offsetHeight) * 0.42));
+  timeline.scrollTo({
+    top: targetTop,
+    behavior: "smooth"
+  });
+}
+
+function renderTimeline(activeIndex = -1, options = {}) {
   els.timeline.innerHTML = "";
   if (!state.events.length) {
     const empty = document.createElement("div");
@@ -599,11 +759,15 @@ function renderTimeline(activeIndex = -1) {
     els.timeline.append(empty);
   }
 
+  let activeTile = null;
   state.events.forEach((event, index) => {
     const tile = document.createElement("button");
     tile.type = "button";
     tile.className = `event-tile ${event.type}`;
-    if (index === activeIndex) tile.classList.add("playing");
+    if (index === activeIndex) {
+      tile.classList.add("playing");
+      activeTile = tile;
+    }
     tile.title = "Remove this box";
     tile.addEventListener("click", () => {
       state.events.splice(index, 1);
@@ -634,6 +798,9 @@ function renderTimeline(activeIndex = -1) {
 
   const count = state.events.filter((event) => event.type !== "line").length;
   els.sheetMeta.textContent = `${count} box${count === 1 ? "" : "es"}`;
+  if (options.followActive && activeTile) {
+    window.requestAnimationFrame(() => scrollTimelineToActiveTile(activeTile));
+  }
 }
 
 function renderMode() {
@@ -1170,36 +1337,111 @@ function renderWordingAssignments() {
   if (!els.wordingResultList) return;
 
   els.importWordingBtn.disabled = assignments.length === 0;
-  els.wordingResultList.innerHTML = "";
 
   if (!assignments.length) {
-    els.wordingResultList.innerHTML = '<div class="wording-row"><span class="name">No words aligned</span></div>';
+    renderVisualTimingMap(els.wordingResultList, [], "No words aligned");
     return;
   }
 
-  assignments.forEach((assignment) => {
+  renderVisualTimingMap(els.wordingResultList, assignments.map((assignment) => {
     const mapping = melodyMapping(assignment.note);
-    const row = document.createElement("div");
-    row.className = "wording-row";
+    return {
+      start: assignment.note.start,
+      end: assignment.note.end,
+      label: assignment.word,
+      detail: melodyNoteLabel(assignment.note),
+      meta: `confidence ${(assignment.note.confidence || 0).toFixed(2)}`,
+      buttonIds: [mapping.buttonId],
+      kind: "wording"
+    };
+  }), "No words aligned");
+}
 
-    const word = document.createElement("span");
-    word.className = "word";
-    word.textContent = assignment.word;
+function timingMapDuration(items) {
+  const analysisDuration = state.chordAnalysis && state.chordAnalysis.duration ? state.chordAnalysis.duration : 0;
+  const maxEnd = items.reduce((max, item) => Math.max(max, Number(item.end) || Number(item.start) || 0), 0);
+  return Math.max(1, analysisDuration, maxEnd);
+}
+
+function makeTimingKeyChips(buttonIds = []) {
+  const wrap = document.createElement("div");
+  wrap.className = "timing-keys";
+  const uniqueIds = [...new Set(buttonIds.filter((id) => Number.isFinite(id)))].slice(0, 5);
+
+  if (!uniqueIds.length) {
+    const chip = document.createElement("span");
+    chip.className = "timing-key-chip muted";
+    chip.textContent = "no key";
+    wrap.append(chip);
+    return wrap;
+  }
+
+  uniqueIds.forEach((id) => {
+    const chip = document.createElement("span");
+    chip.className = "timing-key-chip";
+    chip.textContent = `${getButton(id).abc} ${getCellNote(id)}`;
+    wrap.append(chip);
+  });
+
+  return wrap;
+}
+
+function renderVisualTimingMap(container, items, emptyText) {
+  if (!container) return;
+  const safeItems = (items || [])
+    .filter((item) => Number.isFinite(item.start) || Number.isFinite(item.end))
+    .slice(0, 900);
+  container.classList.add("visual-map-list");
+  container.innerHTML = "";
+
+  if (!safeItems.length) {
+    const empty = document.createElement("div");
+    empty.className = "timing-empty";
+    empty.textContent = emptyText;
+    container.append(empty);
+    return;
+  }
+
+  const duration = timingMapDuration(safeItems);
+  safeItems.forEach((item) => {
+    const start = Math.max(0, Number(item.start) || 0);
+    const end = Math.max(start + 0.04, Number(item.end) || start + Number(item.duration) || start + 0.18);
+    const left = Math.max(0, Math.min(98, (start / duration) * 100));
+    const width = Math.max(1.2, Math.min(100 - left, ((end - start) / duration) * 100));
+    const card = document.createElement("div");
+    card.className = `timing-card ${item.kind ? `timing-${String(item.kind).replace(/[^a-z0-9_-]/gi, "-").toLowerCase()}` : ""}`.trim();
+
+    const head = document.createElement("div");
+    head.className = "timing-card-head";
+
+    const time = document.createElement("span");
+    time.className = "time";
+    time.textContent = `${formatTime(start)}-${formatTime(end)}`;
 
     const name = document.createElement("span");
     name.className = "name";
-    name.textContent = melodyNoteLabel(assignment.note);
+    name.textContent = item.label || "Event";
 
-    const sky = document.createElement("span");
-    sky.className = "sky";
-    sky.textContent = `${mapping.abc}:${mapping.noteName}`;
+    const detail = document.createElement("span");
+    detail.className = "sky";
+    detail.textContent = item.detail || item.kind || "mapped";
 
-    const score = document.createElement("span");
-    score.className = "score";
-    score.textContent = assignment.note.confidence.toFixed(2);
+    const meta = document.createElement("span");
+    meta.className = "score";
+    meta.textContent = item.meta || "";
 
-    row.append(word, name, sky, score);
-    els.wordingResultList.append(row);
+    head.append(time, name, detail, meta);
+
+    const lane = document.createElement("div");
+    lane.className = "timing-lane";
+    const bar = document.createElement("span");
+    bar.className = "timing-bar";
+    bar.style.left = `${left.toFixed(2)}%`;
+    bar.style.width = `${width.toFixed(2)}%`;
+    lane.append(bar);
+
+    card.append(head, lane, makeTimingKeyChips(item.buttonIds || []));
+    container.append(card);
   });
 }
 
@@ -1211,7 +1453,7 @@ function renderRhythmAnalysis() {
 
   if (!rhythmHits.length) {
     els.rhythmOutputText.value = "";
-    els.rhythmResultList.innerHTML = '<div class="rhythm-row"><span class="name">No rhythm hits yet</span></div>';
+    renderVisualTimingMap(els.rhythmResultList, [], "No rhythm hits yet");
     return;
   }
 
@@ -1219,30 +1461,19 @@ function renderRhythmAnalysis() {
     .map((hit) => `${formatTime(hit.time)} | beat ${hit.beatLabel} | strength ${hit.strength.toFixed(2)}`)
     .join("\n");
 
-  els.rhythmResultList.innerHTML = "";
-  rhythmHits.slice(0, 800).forEach((hit) => {
-    const row = document.createElement("div");
-    row.className = "rhythm-row";
-
-    const time = document.createElement("span");
-    time.className = "time";
-    time.textContent = formatTime(hit.time);
-
-    const name = document.createElement("span");
-    name.className = "name";
-    name.textContent = `Beat ${hit.beatLabel}`;
-
-    const sky = document.createElement("span");
-    sky.className = "sky";
-    sky.textContent = hit.strength >= 0.72 ? "strong" : "pulse";
-
-    const score = document.createElement("span");
-    score.className = "score";
-    score.textContent = hit.strength.toFixed(2);
-
-    row.append(time, name, sky, score);
-    els.rhythmResultList.append(row);
-  });
+  renderVisualTimingMap(els.rhythmResultList, rhythmHits.map((hit) => {
+    const segment = findChordSegmentAtTime(state.chordAnalysis.segments || [], hit.time);
+    const buttonIds = chordAccentButtons(segment, state.chordAnalysis.feelDensity || "balanced").slice(0, 3);
+    return {
+      start: hit.time,
+      end: hit.time + Math.max(0.12, 60 / Math.max(30, state.bpm || 96) * 0.35),
+      label: `Beat ${hit.beatLabel}`,
+      detail: hit.strength >= 0.72 ? "strong pulse" : "pulse",
+      meta: hit.strength.toFixed(2),
+      buttonIds,
+      kind: "rhythm"
+    };
+  }), "No rhythm hits yet");
 }
 
 function trackLineForNote(note) {
@@ -1262,6 +1493,30 @@ function renderSeparatedTracks() {
   els.backgroundOutputText.value = background.length
     ? background.map(trackLineForNote).join("\n")
     : "";
+  renderVisualTimingMap(els.foregroundResultList, foreground.map((note) => {
+    const mapping = melodyMapping(note);
+    return {
+      start: note.start,
+      end: note.end,
+      label: melodyNoteLabel(note),
+      detail: note.themeStrength ? `theme ${note.themeStrength.toFixed(2)}` : note.source || "foreground",
+      meta: `${Math.max(0.01, note.end - note.start).toFixed(2)}s`,
+      buttonIds: [mapping.buttonId],
+      kind: "foreground"
+    };
+  }), "No foreground notes yet");
+  renderVisualTimingMap(els.backgroundResultList, background.map((note) => {
+    const mapping = melodyMapping(note);
+    return {
+      start: note.start,
+      end: note.end,
+      label: melodyNoteLabel(note),
+      detail: note.themeStrength ? `theme ${note.themeStrength.toFixed(2)}` : note.source || "background",
+      meta: `${Math.max(0.01, note.end - note.start).toFixed(2)}s`,
+      buttonIds: [mapping.buttonId],
+      kind: "background"
+    };
+  }), "No background notes yet");
 }
 
 function renderCombinedAnalysis() {
@@ -1274,37 +1529,30 @@ function renderCombinedAnalysis() {
 
   if (!combinedEvents.length) {
     els.combinedOutputText.value = "";
-    els.combinedResultList.innerHTML = '<div class="combined-row"><span class="name">No combined sheet yet</span></div>';
+    renderVisualTimingMap(els.combinedResultList, [], "No combined sheet yet");
     return;
   }
 
   els.combinedOutputText.value = joinTokens(combinedEvents, abcForEvent);
-  els.combinedResultList.innerHTML = "";
-
-  combinedEvents.slice(0, 900).forEach((event, index) => {
-    if (event.type === "bar" || event.type === "line") return;
-    const row = document.createElement("div");
-    row.className = "combined-row";
-
-    const time = document.createElement("span");
-    time.className = "time";
-    time.textContent = Number.isFinite(event.time) ? formatTime(event.time) : String(index + 1);
-
-    const name = document.createElement("span");
-    name.className = "name";
-    name.textContent = eventLabel(event);
-
-    const sky = document.createElement("span");
-    sky.className = "sky";
-    sky.textContent = event.kind || event.type;
-
-    const score = document.createElement("span");
-    score.className = "score";
-    score.textContent = event.type === "note" ? `${event.duration}b` : `${event.duration || 0}b`;
-
-    row.append(time, name, sky, score);
-    els.combinedResultList.append(row);
-  });
+  const beatSeconds = 60 / Math.max(30, Number(state.bpm) || 96);
+  let cursor = 0;
+  renderVisualTimingMap(els.combinedResultList, combinedEvents.map((event) => {
+    const duration = event.type === "note" || event.type === "rest"
+      ? Math.max(0.04, Number(event.duration) || 0.25) * beatSeconds
+      : 0;
+    const start = Number.isFinite(event.time) ? event.time : cursor;
+    cursor = start + duration;
+    if (event.type === "bar" || event.type === "line") return null;
+    return {
+      start,
+      end: start + duration,
+      label: eventLabel(event),
+      detail: event.kind || event.type,
+      meta: `${event.duration || 0}b`,
+      buttonIds: event.type === "note" ? event.notes : [],
+      kind: event.kind || event.type
+    };
+  }).filter(Boolean), "No combined sheet yet");
 }
 
 function renderChordAnalysis() {
@@ -1353,7 +1601,7 @@ function renderChordAnalysis() {
 
   if (!segments.length) {
     els.chordOutputText.value = "";
-    els.chordResultList.innerHTML = '<div class="chord-row"><span class="name">No chords yet</span></div>';
+    renderVisualTimingMap(els.chordResultList, [], "No chords yet");
   } else {
     const outputLines = segments.map((segment) => {
       const mapping = mappingForChord(segment);
@@ -1363,36 +1611,23 @@ function renderChordAnalysis() {
     });
     els.chordOutputText.value = analysis.refinedText || outputLines.join("\n");
 
-    els.chordResultList.innerHTML = "";
-    segments.forEach((segment) => {
+    renderVisualTimingMap(els.chordResultList, segments.map((segment) => {
       const mapping = mappingForChord(segment);
-      const row = document.createElement("div");
-      row.className = "chord-row";
-
-      const time = document.createElement("span");
-      time.className = "time";
-      time.textContent = `${formatTime(segment.start)}-${formatTime(segment.end)}`;
-
-      const name = document.createElement("span");
-      name.className = "name";
-      name.textContent = displayChordLabel(segment);
-
-      const sky = document.createElement("span");
-      sky.className = "sky";
-      sky.textContent = segment.label === "N.C." ? "rest" : mapping ? mapping.text : "not in key";
-
-      const score = document.createElement("span");
-      score.className = "score";
-      score.textContent = segment.score.toFixed(2);
-
-      row.append(time, name, sky, score);
-      els.chordResultList.append(row);
-    });
+      return {
+        start: segment.start,
+        end: segment.end,
+        label: displayChordLabel(segment),
+        detail: segment.label === "N.C." ? "rest" : mapping ? mapping.text : "not in key",
+        meta: segment.score.toFixed(2),
+        buttonIds: mapping ? mapping.buttonIds : [],
+        kind: segment.label === "N.C." ? "rest" : "chord"
+      };
+    }), "No chords yet");
   }
 
   if (!melodyNotes.length) {
     els.melodyOutputText.value = "";
-    els.melodyResultList.innerHTML = '<div class="melody-row"><span class="name">No melody yet</span></div>';
+    renderVisualTimingMap(els.melodyResultList, [], "No melody yet");
     renderRhythmAnalysis();
     renderSeparatedTracks();
     renderCombinedAnalysis();
@@ -1408,30 +1643,18 @@ function renderChordAnalysis() {
   els.melodyOutputText.value = melodyLines.join("\n");
 
   els.melodyResultList.innerHTML = "";
-  melodyNotes.forEach((note) => {
+  renderVisualTimingMap(els.melodyResultList, melodyNotes.map((note) => {
     const mapping = melodyMapping(note);
-    const row = document.createElement("div");
-    row.className = "melody-row";
-
-    const time = document.createElement("span");
-    time.className = "time";
-    time.textContent = `${formatTime(note.start)}-${formatTime(note.end)}`;
-
-    const name = document.createElement("span");
-    name.className = "name";
-    name.textContent = melodyNoteLabel(note);
-
-    const sky = document.createElement("span");
-    sky.className = "sky";
-    sky.textContent = `${mapping.abc}:${mapping.noteName}`;
-
-    const score = document.createElement("span");
-    score.className = "score";
-    score.textContent = note.confidence.toFixed(2);
-
-    row.append(time, name, sky, score);
-    els.melodyResultList.append(row);
-  });
+    return {
+      start: note.start,
+      end: note.end,
+      label: melodyNoteLabel(note),
+      detail: `${mapping.abc}:${mapping.noteName}`,
+      meta: (note.confidence || 0).toFixed(2),
+      buttonIds: [mapping.buttonId],
+      kind: "melody"
+    };
+  }), "No melody yet");
 
   renderRhythmAnalysis();
   renderSeparatedTracks();
@@ -1554,10 +1777,75 @@ function joinTokens(events, formatter) {
   return output.trim();
 }
 
+function buildTimedExportEvents(events, beatSeconds) {
+  let beatCursor = 0;
+  return events.map((event, index) => {
+    const startBeat = beatCursor;
+    const durationBeats = event.type === "note" || event.type === "rest"
+      ? Math.max(0.03125, Number(event.duration) || 0.25)
+      : 0;
+    const output = {
+      index,
+      type: event.type,
+      label: eventLabel(event),
+      startBeat: Number(startBeat.toFixed(5)),
+      startSeconds: Number((startBeat * beatSeconds).toFixed(5))
+    };
+
+    if (durationBeats > 0) {
+      output.durationBeats = Number(durationBeats.toFixed(5));
+      output.durationSeconds = Number((durationBeats * beatSeconds).toFixed(5));
+      output.endBeat = Number((startBeat + durationBeats).toFixed(5));
+      output.endSeconds = Number(((startBeat + durationBeats) * beatSeconds).toFixed(5));
+    }
+
+    if (event.type === "note") {
+      output.notes = event.notes.map((id) => ({
+        button: id,
+        abc: getButton(id).abc,
+        noteName: getCellNote(id),
+        frequency: Number(frequencyForButton(id).toFixed(3))
+      }));
+    }
+
+    if (event.kind) output.kind = event.kind;
+    if (Number.isFinite(event.gate)) output.gate = event.gate;
+    beatCursor += durationBeats;
+    return output;
+  });
+}
+
+function getTimedSheetExport() {
+  const bpm = Math.min(240, Math.max(30, Number(state.bpm) || 96));
+  const beatSeconds = 60 / bpm;
+  const events = buildTimedExportEvents(state.events, beatSeconds);
+  const totalBeats = events.reduce((max, event) => Math.max(max, event.endBeat || event.startBeat || 0), 0);
+  const config = currentConfig();
+
+  return {
+    schema: "sky-piano-sheet-maker/timed-v1",
+    title: els.titleInput.value,
+    transcriber: els.authorInput.value,
+    key: {
+      id: state.keyId,
+      label: config.label,
+      setup: config.setup
+    },
+    bpm,
+    beatSeconds: Number(beatSeconds.toFixed(6)),
+    defaultDurationBeats: Number(state.duration),
+    notation: "Sky COTL 15-button grid",
+    totalBeats: Number(totalBeats.toFixed(5)),
+    totalSeconds: Number((totalBeats * beatSeconds).toFixed(5)),
+    events
+  };
+}
+
 function getExportText() {
   const format = els.exportFormat.value;
   if (format === "numbers") return joinTokens(state.events, numbersForEvent);
   if (format === "notes") return joinTokens(state.events, notesForEvent);
+  if (format === "timed-json") return JSON.stringify(getTimedSheetExport(), null, 2);
   if (format === "json") {
     return JSON.stringify({
       title: els.titleInput.value,
@@ -1641,8 +1929,149 @@ function importSheet(mode) {
   setStatus(`Imported ${nextEvents.length} boxes`);
 }
 
+function syncAudioWizardControls() {
+  if (els.wizardMelodySensitivityInput && els.melodySensitivityInput) {
+    els.melodySensitivityInput.value = els.wizardMelodySensitivityInput.value;
+  }
+  if (els.wizardChordSensitivityInput && els.chordSensitivityInput) {
+    els.chordSensitivityInput.value = els.wizardChordSensitivityInput.value;
+  }
+  if (els.wizardFeelDensitySelect && els.feelDensitySelect) {
+    els.feelDensitySelect.value = els.wizardFeelDensitySelect.value;
+  }
+  if (els.wizardPlayabilitySelect && els.playabilitySelect) {
+    els.playabilitySelect.value = els.wizardPlayabilitySelect.value;
+    state.chordAnalysis.playability = els.wizardPlayabilitySelect.value;
+  }
+  if (els.wizardBpmInput && els.bpmInput) {
+    state.bpm = Math.min(240, Math.max(30, Number(els.wizardBpmInput.value) || state.bpm || 96));
+    els.bpmInput.value = String(state.bpm);
+    els.wizardBpmInput.value = String(state.bpm);
+    els.wizardBpmInput.disabled = Boolean(els.wizardAutoBpmInput && els.wizardAutoBpmInput.checked);
+  }
+  if (els.wizardEnhancerSelect && els.enhancerSelect) {
+    els.enhancerSelect.value = els.wizardEnhancerSelect.value;
+    state.chordAnalysis.enhancerMode = els.wizardEnhancerSelect.value;
+  }
+}
+
+function applyAudioWizardAutoSettings() {
+  const applied = [];
+  if (els.wizardAutoKeyInput && els.wizardAutoKeyInput.checked && state.chordAnalysis.keyGuess) {
+    state.keyId = state.chordAnalysis.keyGuess.keyId;
+    state.chordAnalysis.refinedText = "";
+    applied.push(`auto key ${state.chordAnalysis.keyGuess.label}`);
+  }
+
+  if (els.wizardAutoBpmInput && els.wizardAutoBpmInput.checked && state.chordAnalysis.tempoEstimate) {
+    state.bpm = Math.min(240, Math.max(30, state.chordAnalysis.tempoEstimate.bpm));
+    applied.push(`auto BPM ${state.bpm}`);
+  }
+
+  if (applied.length) {
+    rebuildCombinedAnalysis();
+    syncControls();
+  }
+
+  return applied;
+}
+
+function updateAudioWizardKeySummary() {
+  if (!els.audioWizardKeyTitle || !els.audioWizardKeyDescription) return;
+  const config = currentConfig();
+  const scale = flattenRows(config.rows).join(", ");
+  const detected = state.chordAnalysis.keyGuess;
+  const autoKeyActive = Boolean(els.wizardAutoKeyInput && els.wizardAutoKeyInput.checked && detected);
+  const confidence = detected ? ` Detected-key confidence score: ${detected.score.toFixed(2)}.` : "";
+  els.audioWizardKeyTitle.textContent = autoKeyActive
+    ? `key auto selected was ${config.label}`
+    : `selected key was ${config.label}`;
+  els.audioWizardKeyDescription.textContent = `${config.setup} Your 15 Sky piano buttons now map to ${scale}.${confidence}`;
+}
+
+function setAudioResultTab(tab) {
+  const nextTab = ["sheets", "details", "timing"].includes(tab) ? tab : "sheets";
+  state.audioResultTab = nextTab;
+  document.body.classList.remove("audio-tab-sheets", "audio-tab-details", "audio-tab-timing");
+  document.body.classList.add(`audio-tab-${nextTab}`);
+
+  [
+    [els.audioTabSheetsBtn, "sheets"],
+    [els.audioTabDetailsBtn, "details"],
+    [els.audioTabTimingBtn, "timing"]
+  ].forEach(([button, id]) => {
+    if (!button) return;
+    const active = id === nextTab;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", active ? "true" : "false");
+  });
+}
+
+function setAudioWizardStep(step) {
+  const nextStep = ["file", "sensitivity", "feel", "processing", "done"].includes(step) ? step : "file";
+  state.audioWizardStep = nextStep;
+  document.body.classList.remove("audio-results-open");
+  setAudioFinalExportMode(false);
+  document.querySelectorAll("[data-audio-step]").forEach((panel) => {
+    panel.classList.toggle("is-active", panel.dataset.audioStep === nextStep);
+  });
+  if (nextStep === "processing") updateAudioWizardProgress("Preparing analysis");
+  if (nextStep === "done") updateAudioWizardKeySummary();
+}
+
+function setAudioFinalExportMode(active) {
+  if (active) {
+    if (els.exportFormat) els.exportFormat.value = "timed-json";
+    if (els.exportTitle) els.exportTitle.textContent = "Save";
+    if (els.exportSubtitle) els.exportSubtitle.textContent = "Timed JSON export for the generated Sky sheet";
+    if (els.copyExportBtn) els.copyExportBtn.textContent = "Copy timed JSON";
+  } else {
+    if (els.exportTitle) els.exportTitle.textContent = "Import / Export";
+    if (els.exportSubtitle) els.exportSubtitle.textContent = "ABC1-5, numbers, note names, JSON, timed JSON";
+    if (els.copyExportBtn) els.copyExportBtn.textContent = "Copy export";
+  }
+  renderExport();
+}
+
+function openAudioResults() {
+  if (!state.events.length && (state.chordAnalysis.combinedEvents || []).some((event) => event.type === "note")) {
+    importCombinedArrangement();
+  }
+  setAudioFinalExportMode(true);
+  setAudioResultTab("sheets");
+  document.body.classList.add("audio-results-open");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function wizardProgressForStatus(text) {
+  const value = String(text || "");
+  const percentMatch = value.match(/(\d+)%/);
+  const percent = percentMatch ? Math.max(0, Math.min(100, Number(percentMatch[1]))) : 0;
+
+  if (/failed/i.test(value)) return 100;
+  if (/analyzed:/i.test(value)) return 100;
+  if (/caching song frequencies/i.test(value)) return 72 + percent * 0.18;
+  if (/extracting rhythm/i.test(value)) return 56 + percent * 0.14;
+  if (/tracking melody/i.test(value)) return 36 + percent * 0.2;
+  if (/analyzing chords/i.test(value)) return 14 + percent * 0.22;
+  if (/Decoding audio/i.test(value)) return 8;
+  return 4;
+}
+
+function updateAudioWizardProgress(text) {
+  if (!els.audioWizardStageText || !els.audioWizardProgressFill) return;
+  const progress = wizardProgressForStatus(text);
+  els.audioWizardStageText.textContent = text || "Preparing analysis";
+  els.audioWizardProgressFill.style.width = `${Math.max(4, Math.min(100, progress)).toFixed(1)}%`;
+  if (els.audioWizardTipText) {
+    const index = Math.abs(String(text || "").length + Math.round(progress)) % AUDIO_WIZARD_TIPS.length;
+    els.audioWizardTipText.textContent = AUDIO_WIZARD_TIPS[index];
+  }
+}
+
 function setAudioStatus(text) {
   els.audioStatus.textContent = text;
+  updateAudioWizardProgress(text);
 }
 
 function setScoreStatus(text) {
@@ -3962,96 +4391,24 @@ function standardDeviation(values, average = mean(values)) {
   return Math.sqrt(variance);
 }
 
-function analysisProfileSettings(profile) {
-  if (profile === "translator") {
-    return {
-      label: "Song translator",
-      melodyHopLength: 256,
-      melodyBatchSize: 14,
-      chordProbeRatios: [0.18, 0.34, 0.5, 0.66, 0.82],
-      chordBatchSize: 3,
-      rhythmHopLength: 192,
-      rhythmBatchSize: 48,
-      pianoFrameLength: 4096,
-      pianoHopLength: 640,
-      pianoBatchSize: 4,
-      translatorMaxFrameNotes: 6,
-      translatorLeadSensitivity: 0.19,
-      translatorChordSensitivity: 0.48,
-      neuralMaxFrameNotes: 6,
-      neuralSensitivity: 0.34,
-      selfCorrectPasses: 2
-    };
-  }
-
-  if (profile === "neural") {
-    return {
-      label: "Neural lattice",
-      melodyHopLength: 192,
-      melodyBatchSize: 10,
-      chordProbeRatios: [0.12, 0.25, 0.38, 0.5, 0.62, 0.75, 0.88],
-      chordBatchSize: 2,
-      rhythmHopLength: 160,
-      rhythmBatchSize: 36,
-      pianoFrameLength: 4096,
-      pianoHopLength: 512,
-      pianoBatchSize: 3,
-      neuralMaxFrameNotes: 8,
-      neuralSensitivity: 0.26,
-      selfCorrectPasses: 2
-    };
-  }
-
-  if (profile === "beast") {
-    return {
-      label: "Beast",
-      melodyHopLength: 256,
-      melodyBatchSize: 14,
-      chordProbeRatios: [0.16, 0.33, 0.5, 0.67, 0.84],
-      chordBatchSize: 3,
-      rhythmHopLength: 192,
-      rhythmBatchSize: 46,
-      pianoFrameLength: 4096,
-      pianoHopLength: 768,
-      pianoBatchSize: 4,
-      neuralMaxFrameNotes: 7,
-      neuralSensitivity: 0.3,
-      selfCorrectPasses: 1
-    };
-  }
-
-  if (profile === "balanced") {
-    return {
-      label: "Balanced",
-      melodyHopLength: 384,
-      melodyBatchSize: 24,
-      chordProbeRatios: [0.35, 0.65],
-      chordBatchSize: 6,
-      rhythmHopLength: 320,
-      rhythmBatchSize: 64,
-      pianoFrameLength: 2048,
-      pianoHopLength: 1024,
-      pianoBatchSize: 6,
-      neuralMaxFrameNotes: 5,
-      neuralSensitivity: 0.36,
-      selfCorrectPasses: 1
-    };
-  }
-
+function analysisProfileSettings() {
   return {
-    label: "Long song",
-    melodyHopLength: 512,
-    melodyBatchSize: 30,
-    chordProbeRatios: [0.22, 0.5, 0.78],
-    chordBatchSize: 5,
-    rhythmHopLength: 256,
-    rhythmBatchSize: 70,
+    label: "Song translator",
+    melodyHopLength: 256,
+    melodyBatchSize: 14,
+    chordProbeRatios: [0.18, 0.34, 0.5, 0.66, 0.82],
+    chordBatchSize: 3,
+    rhythmHopLength: 192,
+    rhythmBatchSize: 48,
     pianoFrameLength: 4096,
-    pianoHopLength: 1536,
-    pianoBatchSize: 5,
+    pianoHopLength: 640,
+    pianoBatchSize: 4,
+    translatorMaxFrameNotes: 6,
+    translatorLeadSensitivity: 0.19,
+    translatorChordSensitivity: 0.48,
     neuralMaxFrameNotes: 6,
-    neuralSensitivity: 0.33,
-    selfCorrectPasses: 1
+    neuralSensitivity: 0.34,
+    selfCorrectPasses: 2
   };
 }
 
@@ -6441,7 +6798,8 @@ function buildPianoCoverTracks(samples, sampleRate, duration, tempoEstimate, opt
 }
 
 async function analyzeAudioFile() {
-  const file = els.audioFileInput.files && els.audioFileInput.files[0];
+  const file = (els.audioWizardFileInput && els.audioWizardFileInput.files && els.audioWizardFileInput.files[0]) ||
+    (els.audioFileInput.files && els.audioFileInput.files[0]);
   if (!file) {
     setAudioStatus("Choose an MP3 file");
     return;
@@ -6456,10 +6814,11 @@ async function analyzeAudioFile() {
   setAudioStatus("Decoding audio");
 
   try {
-    const profile = els.analysisProfileSelect.value || "long";
+    const profile = "translator";
+    if (els.analysisProfileSelect) els.analysisProfileSelect.value = profile;
     const density = els.feelDensitySelect.value || "balanced";
     const playability = els.playabilitySelect ? els.playabilitySelect.value : "human";
-    const settings = analysisProfileSettings(profile);
+    const settings = analysisProfileSettings();
     const ctx = getAudioContext();
     const buffer = await ctx.decodeAudioData(await file.arrayBuffer());
     const targetRate = Math.min(11025, buffer.sampleRate);
@@ -6509,20 +6868,14 @@ async function analyzeAudioFile() {
     const smoothed = smoothChordFrames(analysis.frames);
     const chromaMerged = enforceMinimumChordDuration(mergeFrames(smoothed), minimumSeconds);
     let merged = fuseAudioChordSegments(chromaMerged, pianoTracks.translatorChordFrames, minimumSeconds, buffer.duration);
-    if (profile === "neural") {
-      merged = fuseAudioChordSegments(merged, pianoTracks.neuralChordFrames, minimumSeconds, buffer.duration);
-    }
-
     const translatorLead = mergeMelodySources(melody.notes, pianoTracks.translatorMelodyNotes || [], buffer.duration, tempoEstimate);
     const baseMelody = mergeMelodySources(translatorLead, pianoTracks.foregroundNotes, buffer.duration, tempoEstimate);
-    const neuralMelody = profile === "neural"
-      ? mergeMelodyWithNeuralForeground(baseMelody, pianoTracks.neuralForegroundNotes || [], buffer.duration, tempoEstimate, false)
-      : { notes: baseMelody, added: 0 };
+    const neuralMelody = { notes: baseMelody, added: 0 };
     const mergedMelody = neuralMelody.notes;
     const foregroundNotes = markRecurringThemes(mergeNearDuplicateNotes([
       ...(pianoTracks.translatorMelodyNotes || []),
       ...pianoTracks.foregroundNotes,
-      ...(profile === "neural" ? pianoTracks.neuralForegroundNotes || [] : [])
+      ...(pianoTracks.neuralForegroundNotes || []).filter((note) => note.source && note.source.includes("theme"))
     ]));
     const translatedRhythmHits = mergeRhythmSources(rhythm.hits, pianoTracks.translatorRhythmHits || [], tempoEstimate);
     const baseBackgroundNotes = markRecurringThemes(mergeNearDuplicateNotes([
@@ -6531,7 +6884,7 @@ async function analyzeAudioFile() {
     ]));
     const backgroundMerge = mergeBackgroundSources(
       baseBackgroundNotes,
-      profile === "neural" ? pianoTracks.neuralBackgroundNotes || [] : [],
+      [],
       buffer.duration,
       tempoEstimate,
       false
@@ -6543,7 +6896,7 @@ async function analyzeAudioFile() {
     const recoveryAllNotes = markRecurringThemes(mergeNearDuplicateNotes([
       ...(pianoTracks.translatorMelodyNotes || []),
       ...(pianoTracks.translatorBackgroundNotes || []),
-      ...(profile === "neural" ? pianoTracks.neuralNotes || [] : [])
+      ...(pianoTracks.neuralNotes || [])
     ]));
     const inputSignature = buildInputFeatureSignature(combinedChroma, rhythm.envelope, recoveryAllNotes, buffer.duration);
     state.chordAnalysis = {
@@ -6575,7 +6928,12 @@ async function analyzeAudioFile() {
       foregroundNotes: pianoTracks.translatorMelodyNotes || [],
       backgroundNotes: pianoTracks.translatorBackgroundNotes || []
     }, inputSignature, settings, density);
-    renderChordAnalysis();
+    const autoApplied = state.converterMode === "audio" ? applyAudioWizardAutoSettings() : [];
+    if (autoApplied.length) {
+      renderAll();
+    } else {
+      renderChordAnalysis();
+    }
     const tempoText = tempoEstimate ? `, ${tempoEstimate.bpm} BPM` : "";
     const flow = state.chordAnalysis.enhancementSummary;
     const flowText = flow && flow.label !== "Off" ? `, ${flow.label} timing` : "";
@@ -6585,7 +6943,9 @@ async function analyzeAudioFile() {
     const cacheText = pianoTracks.songCacheSummary ? `, ${pianoTracks.songCacheSummary.frameCount} cached frames` : "";
     const fallbackText = (pianoTracks.translatorMelodyNotes || []).length > melody.notes.length ? ", song-lead translation" : "";
     const playabilityText = `, ${playabilitySettings(playability).label}`;
-    setAudioStatus(`${file.name} analyzed: ${state.chordAnalysis.melodyNotes.length} melody notes, ${state.chordAnalysis.backgroundNotes.length} accompaniment notes, ${state.chordAnalysis.rhythmHits.length} rhythm hits, ${state.chordAnalysis.segments.length} chord segments${tempoText}${flowText}${playabilityText}${qualityText}${recovered ? `, ${recovered} self-corrections` : ""}${cacheText}${fallbackText}`);
+    const autoText = autoApplied.length ? `, ${autoApplied.join(", ")}` : "";
+    setAudioStatus(`${file.name} analyzed: ${state.chordAnalysis.melodyNotes.length} melody notes, ${state.chordAnalysis.backgroundNotes.length} accompaniment notes, ${state.chordAnalysis.rhythmHits.length} rhythm hits, ${state.chordAnalysis.segments.length} chord segments${tempoText}${flowText}${playabilityText}${qualityText}${recovered ? `, ${recovered} self-corrections` : ""}${cacheText}${fallbackText}${autoText}`);
+    if (state.converterMode === "audio") setAudioWizardStep("done");
   } catch (error) {
     state.chordAnalysis = {
       fileName: "",
@@ -6601,7 +6961,7 @@ async function analyzeAudioFile() {
       combinedEvents: [],
       tempoEstimate: null,
       tuning: null,
-      analysisProfile: els.analysisProfileSelect.value || "long",
+      analysisProfile: "translator",
       feelDensity: els.feelDensitySelect.value || "balanced",
       playability: els.playabilitySelect ? els.playabilitySelect.value : "human",
       enhancerMode: els.enhancerSelect.value || "threePhase",
@@ -7049,31 +7409,33 @@ function skySampleCacheKey(ctx, frequency) {
 }
 
 function createSkyPianoSample(ctx, frequency) {
-  const seconds = frequency > 1200 ? 2.05 : frequency > 700 ? 2.45 : 2.85;
+  const seconds = frequency > 1200 ? 1.9 : frequency > 700 ? 2.35 : 2.85;
   const length = Math.max(1, Math.floor(ctx.sampleRate * seconds));
   const buffer = ctx.createBuffer(2, length, ctx.sampleRate);
-  const attackSeconds = 0.0045;
-  const bodyDecay = frequency > 900 ? 4.35 : 3.35;
+  const attackSeconds = 0.0038;
+  const bodyDecay = frequency > 1100 ? 3.55 : frequency > 700 ? 2.7 : 2.15;
+  const tailDecay = frequency > 1100 ? 1.55 : frequency > 700 ? 1.25 : 1.02;
   let peak = 0.0001;
   const mono = new Float32Array(length);
 
   for (let index = 0; index < length; index += 1) {
     const time = index / ctx.sampleRate;
     const attack = Math.min(1, time / attackSeconds);
-    const fadeOut = Math.min(1, (seconds - time) / 0.08);
+    const fadeOut = Math.min(1, (seconds - time) / 0.12);
     const envelope = attack * Math.max(0, fadeOut);
     const body = Math.exp(-time * bodyDecay);
-    const hammer = Math.exp(-time * 30);
-    const fundamental = Math.sin(TWO_PI * frequency * time) * 0.82 * body;
-    const octave = Math.sin(TWO_PI * frequency * 2 * time + 0.2) * 0.105 * Math.exp(-time * 6.2);
-    const third = Math.sin(TWO_PI * frequency * 3 * time + 0.55) * 0.026 * Math.exp(-time * 9.5);
-    const hammerTone = Math.sin(TWO_PI * frequency * 4 * time + 0.9) * 0.012 * hammer;
+    const tail = Math.exp(-time * tailDecay);
+    const hammer = Math.exp(-time * 42);
+    const fundamental = Math.sin(TWO_PI * frequency * time) * (0.66 * body + 0.16 * tail);
+    const octave = Math.sin(TWO_PI * frequency * 2 * time + 0.18) * 0.082 * Math.exp(-time * 5.6);
+    const third = Math.sin(TWO_PI * frequency * 3 * time + 0.52) * 0.018 * Math.exp(-time * 8.8);
+    const hammerTone = Math.sin(TWO_PI * frequency * 4 * time + 0.74) * 0.016 * hammer;
     const value = (fundamental + octave + third + hammerTone) * envelope;
     mono[index] = value;
     peak = Math.max(peak, Math.abs(value));
   }
 
-  const normalize = 0.68 / peak;
+  const normalize = 0.64 / peak;
   for (let channel = 0; channel < 2; channel += 1) {
     const data = buffer.getChannelData(channel);
     for (let index = 0; index < length; index += 1) {
@@ -7092,6 +7454,137 @@ function getSkyPianoSample(ctx, frequency) {
   return skyPianoSampleCache.get(key);
 }
 
+function uniquePlaybackButtonIds(events) {
+  const ids = new Set();
+  events.forEach((event) => {
+    if (event.type !== "note" || !Array.isArray(event.notes)) return;
+    event.notes.forEach((id) => {
+      if (Number.isInteger(id) && id >= 1 && id <= 15) ids.add(id);
+    });
+  });
+  return [...ids].sort((a, b) => a - b);
+}
+
+function nextAnimationFrame() {
+  return new Promise((resolve) => window.requestAnimationFrame(resolve));
+}
+
+async function precachePlaybackSamples(events, ctx, onProgress) {
+  const ids = uniquePlaybackButtonIds(events);
+  let generated = 0;
+
+  getAudioGraph();
+
+  for (let index = 0; index < ids.length; index += 1) {
+    const frequency = frequencyForButton(ids[index]);
+    const key = skySampleCacheKey(ctx, frequency);
+    if (!skyPianoSampleCache.has(key)) {
+      getSkyPianoSample(ctx, frequency);
+      generated += 1;
+    }
+
+    if (onProgress) onProgress(index + 1, ids.length, generated);
+    if ((index + 1) % 3 === 0) await nextAnimationFrame();
+  }
+
+  return {
+    noteCount: ids.length,
+    generated
+  };
+}
+
+function hashPlaybackSignature(input) {
+  let hash = 2166136261;
+  for (let index = 0; index < input.length; index += 1) {
+    hash ^= input.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function playbackRenderCacheKey(events, bpm, keyId, sampleRate) {
+  const eventSignature = events.map((event) => {
+    if (event.type === "note") return `n:${Array.isArray(event.notes) ? event.notes.join(",") : ""}:${event.duration || 0}:${event.gate || ""}`;
+    if (event.type === "rest") return `r:${event.duration || 0}`;
+    return event.type;
+  }).join("|");
+  return `${sampleRate}:${keyId}:${bpm}:${hashPlaybackSignature(eventSignature)}`;
+}
+
+function scheduleOfflineTone(offline, frequency, startTime, level, totalSeconds) {
+  const source = offline.createBufferSource();
+  const gain = offline.createGain();
+  const tone = offline.createBiquadFilter();
+  const sample = getSkyPianoSample(offline, frequency);
+  const safeStart = Math.max(0, startTime);
+  const attackEnd = safeStart + 0.005;
+  const tailStart = safeStart + Math.max(0.03, sample.duration - 0.14);
+  const stopTime = Math.min(totalSeconds, safeStart + sample.duration + 0.02);
+  const peakGain = 0.84 * Math.max(0.18, Math.min(1, level || 1));
+
+  source.buffer = sample;
+  tone.type = "lowpass";
+  tone.frequency.setValueAtTime(frequency > 900 ? 4600 : 4100, safeStart);
+  tone.Q.setValueAtTime(0.18, safeStart);
+
+  gain.gain.cancelScheduledValues(safeStart);
+  gain.gain.setValueAtTime(0.0001, safeStart);
+  gain.gain.exponentialRampToValueAtTime(peakGain, attackEnd);
+  gain.gain.setValueAtTime(peakGain, tailStart);
+  gain.gain.exponentialRampToValueAtTime(0.0001, Math.min(totalSeconds, safeStart + sample.duration));
+
+  source.connect(tone).connect(gain).connect(offline.destination);
+  source.start(safeStart);
+  if (stopTime > safeStart) source.stop(stopTime);
+}
+
+async function renderSheetAudioBuffer(playback, ctx) {
+  const OfflineAudioContextConstructor = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  if (!OfflineAudioContextConstructor) throw new Error("Offline audio rendering is unavailable in this browser");
+
+  const sampleRate = ctx.sampleRate;
+  const renderTailSeconds = 3.2;
+  const totalSeconds = Math.max(0.25, playback.totalSeconds + renderTailSeconds);
+  const frameCount = Math.max(1, Math.ceil(totalSeconds * sampleRate));
+  const offline = new OfflineAudioContextConstructor(2, frameCount, sampleRate);
+
+  playback.items.forEach((item) => {
+    const event = item.event;
+    if (event.type !== "note" || !Array.isArray(event.notes) || !event.notes.length) return;
+    const noteCount = Math.max(1, event.notes.length);
+    const chordLevel = Math.min(0.92, 1 / Math.pow(noteCount, 0.45));
+    event.notes.forEach((id) => {
+      scheduleOfflineTone(offline, frequencyForButton(id), item.time, chordLevel, totalSeconds);
+    });
+  });
+
+  return offline.startRendering();
+}
+
+async function getRenderedPlaybackAudio(events, playback, ctx) {
+  const bpm = Math.max(30, Number(state.bpm) || 96);
+  const key = playbackRenderCacheKey(events, bpm, state.keyId, ctx.sampleRate);
+  if (renderedPlaybackCache && renderedPlaybackCache.key === key) {
+    return {
+      buffer: renderedPlaybackCache.buffer,
+      cached: true
+    };
+  }
+
+  setStatus("Rendering cached audio file");
+  await nextAnimationFrame();
+  const buffer = await renderSheetAudioBuffer(playback, ctx);
+  renderedPlaybackCache = {
+    key,
+    buffer
+  };
+
+  return {
+    buffer,
+    cached: false
+  };
+}
+
 function playTone(frequency, startTime, duration, options = {}) {
   const ctx = getAudioContext();
   const source = ctx.createBufferSource();
@@ -7100,24 +7593,22 @@ function playTone(frequency, startTime, duration, options = {}) {
   const output = getAudioGraph().input;
   const sample = getSkyPianoSample(ctx, frequency);
   const level = Math.max(0.18, Math.min(1, options.level || 1));
-  const noteSeconds = Math.max(0.04, Number(duration) || 0.16);
   const safeStart = Math.max(ctx.currentTime + 0.004, startTime);
-  const attackEnd = safeStart + 0.006;
-  const holdEnd = safeStart + Math.max(0.018, noteSeconds);
-  const releaseSeconds = Math.max(0.035, Math.min(0.18, noteSeconds * 0.42));
-  const stopTime = Math.min(safeStart + sample.duration, holdEnd + releaseSeconds + 0.06);
-  const peakGain = 0.86 * level;
+  const attackEnd = safeStart + 0.005;
+  const tailStart = safeStart + Math.max(0.03, sample.duration - 0.14);
+  const stopTime = safeStart + sample.duration + 0.02;
+  const peakGain = 0.84 * level;
 
   source.buffer = sample;
   tone.type = "lowpass";
-  tone.frequency.setValueAtTime(frequency > 900 ? 4300 : 3900, safeStart);
+  tone.frequency.setValueAtTime(frequency > 900 ? 4600 : 4100, safeStart);
   tone.Q.setValueAtTime(0.18, safeStart);
 
   gain.gain.cancelScheduledValues(safeStart);
   gain.gain.setValueAtTime(0.0001, safeStart);
   gain.gain.exponentialRampToValueAtTime(peakGain, attackEnd);
-  gain.gain.setValueAtTime(peakGain, Math.min(holdEnd, safeStart + sample.duration - 0.03));
-  gain.gain.exponentialRampToValueAtTime(0.0001, Math.min(stopTime, holdEnd + releaseSeconds));
+  gain.gain.setValueAtTime(peakGain, tailStart);
+  gain.gain.exponentialRampToValueAtTime(0.0001, safeStart + sample.duration);
   source.connect(tone).connect(gain).connect(output);
   source.start(safeStart);
   source.stop(stopTime);
@@ -7125,14 +7616,6 @@ function playTone(frequency, startTime, duration, options = {}) {
   source.onended = () => {
     activeOscillators = activeOscillators.filter((item) => item !== source);
   };
-}
-
-function playbackGateForEvent(event, eventSeconds) {
-  if (Number.isFinite(event.gate)) return Math.max(0.55, Math.min(0.995, event.gate));
-  if (eventSeconds <= 0.17) return 0.72;
-  if (eventSeconds <= 0.34) return 0.82;
-  if (eventSeconds <= 0.7) return 0.91;
-  return 0.96;
 }
 
 function playButton(id) {
@@ -7147,6 +7630,14 @@ function stopPlayback() {
   if (playbackScheduler) {
     window.clearInterval(playbackScheduler);
     playbackScheduler = null;
+  }
+  if (activePlaybackSource) {
+    try {
+      activePlaybackSource.stop();
+    } catch {
+      // Already stopped.
+    }
+    activePlaybackSource = null;
   }
   scheduledTimers.forEach((timer) => window.clearTimeout(timer));
   scheduledTimers = [];
@@ -7227,63 +7718,61 @@ async function playSheet() {
   if (!playback.items.length) return;
 
   const sessionId = playbackSessionId;
-  const startTime = ctx.currentTime + 0.08;
-  const lookaheadSeconds = 1.35;
-  let nextIndex = 0;
-  let finished = false;
+  const cacheSummary = await precachePlaybackSamples(state.events, ctx, (done, total, generated) => {
+    if (!total || !generated) return;
+    setStatus(`Preparing sounds ${done}/${total}`);
+  });
+  if (playbackSessionId !== sessionId) return;
 
-  function scheduleItem(item) {
+  let rendered;
+  try {
+    rendered = await getRenderedPlaybackAudio(state.events, playback, ctx);
+  } catch (error) {
+    console.error(error);
+    setStatus(error.message || "Audio render failed");
+    return;
+  }
+  if (playbackSessionId !== sessionId) return;
+
+  const source = ctx.createBufferSource();
+  source.buffer = rendered.buffer;
+  source.connect(getAudioGraph().input);
+  activePlaybackSource = source;
+
+  const startTime = ctx.currentTime + 0.08;
+
+  function scheduleVisualItem(item) {
     const event = item.event;
     const eventTime = startTime + item.time;
     if (event.type === "note") {
       const eventSeconds = item.durationSeconds;
-      const gate = playbackGateForEvent(event, eventSeconds);
-      const toneSeconds = Math.max(0.045, eventSeconds * gate);
-      const noteCount = Math.max(1, event.notes.length);
-      const chordLevel = Math.min(0.92, 1 / Math.pow(noteCount, 0.45));
       event.notes.forEach((id) => {
-        playTone(frequencyForButton(id), eventTime, toneSeconds, {
-          level: chordLevel
-        });
         schedulePlaybackVisual(() => {
           flashPianoKey(id, Math.min(190, Math.max(90, eventSeconds * 240)));
         }, eventTime, ctx);
       });
-      schedulePlaybackVisual(() => renderTimeline(item.index), eventTime, ctx);
+      schedulePlaybackVisual(() => renderTimeline(item.index, { followActive: true }), eventTime, ctx);
       return;
     }
 
-    schedulePlaybackVisual(() => renderTimeline(item.index), eventTime, ctx);
+    schedulePlaybackVisual(() => renderTimeline(item.index, { followActive: true }), eventTime, ctx);
   }
 
-  function scheduleDueItems() {
+  playback.items.forEach(scheduleVisualItem);
+
+  source.onended = () => {
     if (playbackSessionId !== sessionId) return;
-    const now = ctx.currentTime;
-    while (
-      nextIndex < playback.items.length &&
-      startTime + playback.items[nextIndex].time <= now + lookaheadSeconds
-    ) {
-      scheduleItem(playback.items[nextIndex]);
-      nextIndex += 1;
-    }
+    activePlaybackSource = null;
+    renderTimeline();
+    setStatus("Playback finished");
+  };
 
-    if (!finished && nextIndex >= playback.items.length && now >= startTime + playback.totalSeconds + 0.28) {
-      finished = true;
-      if (playbackScheduler) {
-        window.clearInterval(playbackScheduler);
-        playbackScheduler = null;
-      }
-      scheduledTimers.push(window.setTimeout(() => {
-        if (playbackSessionId !== sessionId) return;
-        renderTimeline();
-        setStatus("Playback finished");
-      }, 180));
-    }
-  }
-
-  scheduleDueItems();
-  playbackScheduler = window.setInterval(scheduleDueItems, 80);
-  setStatus("Playing sheet");
+  source.start(startTime);
+  setStatus(rendered.cached
+    ? "Playing pre-rendered cached audio"
+    : cacheSummary.generated
+      ? "Playing newly rendered cached audio"
+      : "Playing rendered cached audio");
 }
 
 function saveSheet() {
@@ -7354,11 +7843,117 @@ function syncControls() {
   els.notationSelect.value = state.notation;
   els.durationSelect.value = String(state.duration);
   els.bpmInput.value = String(state.bpm);
+  if (els.analysisProfileSelect) els.analysisProfileSelect.value = "translator";
   if (els.enhancerSelect) els.enhancerSelect.value = state.chordAnalysis.enhancerMode || "threePhase";
   if (els.playabilitySelect) els.playabilitySelect.value = state.chordAnalysis.playability || "human";
+  if (els.wizardMelodySensitivityInput && els.melodySensitivityInput) els.wizardMelodySensitivityInput.value = els.melodySensitivityInput.value;
+  if (els.wizardChordSensitivityInput && els.chordSensitivityInput) els.wizardChordSensitivityInput.value = els.chordSensitivityInput.value;
+  if (els.wizardFeelDensitySelect && els.feelDensitySelect) els.wizardFeelDensitySelect.value = els.feelDensitySelect.value;
+  if (els.wizardPlayabilitySelect && els.playabilitySelect) els.wizardPlayabilitySelect.value = els.playabilitySelect.value;
+  if (els.wizardBpmInput) els.wizardBpmInput.value = String(state.bpm);
+  if (els.wizardBpmInput && els.wizardAutoBpmInput) els.wizardBpmInput.disabled = els.wizardAutoBpmInput.checked;
+  if (els.wizardEnhancerSelect && els.enhancerSelect) els.wizardEnhancerSelect.value = els.enhancerSelect.value;
+}
+
+function setConverterMode(mode) {
+  const nextMode = ["landing", "home", "audio", "score"].includes(mode) ? mode : "home";
+  state.converterMode = nextMode;
+  document.body.classList.remove("view-landing", "view-home", "view-audio", "view-score");
+  document.body.classList.add(`view-${nextMode}`);
+  setAudioFinalExportMode(false);
+
+  if (nextMode === "audio") {
+    setStatus("Audio to Sky sheet");
+    const hasCombinedOutput = state.chordAnalysis.combinedEvents.length > 0;
+    document.body.classList.toggle("audio-results-open", hasCombinedOutput);
+    if (hasCombinedOutput) {
+      setAudioFinalExportMode(true);
+      setAudioResultTab("sheets");
+    } else {
+      setAudioWizardStep("file");
+    }
+  } else if (nextMode === "score") {
+    setStatus("Piano sheet to Sky sheet");
+    document.body.classList.remove("audio-results-open");
+  } else {
+    document.body.classList.remove("audio-results-open");
+  }
+
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function bindEvents() {
+  els.authLoginBtn.addEventListener("click", startLogin);
+  els.authUserBtn.addEventListener("click", (event) => {
+    event.stopPropagation();
+    state.auth.menuOpen = !state.auth.menuOpen;
+    renderAuth();
+  });
+  els.authMenuHomeBtn.addEventListener("click", () => {
+    closeAuthMenu();
+    setConverterMode("landing");
+  });
+  els.authLogoutBtn.addEventListener("click", () => {
+    closeAuthMenu();
+    logoutAuth();
+  });
+  document.addEventListener("click", (event) => {
+    if (els.authShell && !els.authShell.contains(event.target)) closeAuthMenu();
+  });
+  els.tryItOutBtn.addEventListener("click", () => setConverterMode("home"));
+  els.chooseAudioBtn.addEventListener("click", () => setConverterMode("audio"));
+  els.chooseScoreBtn.addEventListener("click", () => setConverterMode("score"));
+  els.homeBtn.addEventListener("click", () => setConverterMode("home"));
+  [els.audioTabSheetsBtn, els.audioTabDetailsBtn, els.audioTabTimingBtn].forEach((button) => {
+    if (!button) return;
+    button.addEventListener("click", () => setAudioResultTab(button.dataset.audioTab));
+  });
+  els.audioWizardFileInput.addEventListener("change", () => {
+    const file = els.audioWizardFileInput.files && els.audioWizardFileInput.files[0];
+    setAudioStatus(file ? `${file.name} ready` : "No MP3 loaded");
+    if (file) setAudioWizardStep("sensitivity");
+  });
+  els.audioSensitivityNextBtn.addEventListener("click", () => {
+    syncAudioWizardControls();
+    setAudioWizardStep("feel");
+  });
+  [
+    els.wizardMelodySensitivityInput,
+    els.wizardChordSensitivityInput,
+    els.wizardFeelDensitySelect,
+    els.wizardPlayabilitySelect,
+    els.wizardBpmInput,
+    els.wizardAutoBpmInput,
+    els.wizardAutoKeyInput,
+    els.wizardEnhancerSelect
+  ].forEach((control) => {
+    control.addEventListener("input", syncAudioWizardControls);
+    control.addEventListener("change", syncAudioWizardControls);
+  });
+  els.audioWizardAnalyzeBtn.addEventListener("click", () => {
+    syncAudioWizardControls();
+    setAudioWizardStep("processing");
+    analyzeAudioFile();
+  });
+  els.audioShowOutputBtn.addEventListener("click", openAudioResults);
+  if (els.audioPlayResultBtn) {
+    els.audioPlayResultBtn.addEventListener("click", () => {
+      openAudioResults();
+      if (!state.events.length && (state.chordAnalysis.combinedEvents || []).length) importCombinedArrangement();
+      playSheet();
+    });
+  }
+  els.audioRestartWizardBtn.addEventListener("click", () => {
+    document.body.classList.remove("audio-results-open");
+    if (els.audioWizardFileInput) els.audioWizardFileInput.value = "";
+    if (els.audioFileInput) els.audioFileInput.value = "";
+    if (els.wizardAutoBpmInput) els.wizardAutoBpmInput.checked = true;
+    if (els.wizardAutoKeyInput) els.wizardAutoKeyInput.checked = true;
+    syncControls();
+    setAudioWizardStep("file");
+    setAudioStatus("No MP3 loaded");
+  });
+
   els.keySelect.addEventListener("change", () => {
     state.keyId = els.keySelect.value;
     state.pending = [];
@@ -7450,9 +8045,7 @@ function bindEvents() {
     if (state.chordAnalysis.melodyNotes.length) setAudioStatus("Re-analyze for new melody sensitivity");
   });
   els.analysisProfileSelect.addEventListener("change", () => {
-    if (state.chordAnalysis.segments.length || state.chordAnalysis.melodyNotes.length) {
-      setAudioStatus("Re-analyze for new engine profile");
-    }
+    els.analysisProfileSelect.value = "translator";
   });
   els.feelDensitySelect.addEventListener("change", () => {
     if (state.chordAnalysis.melodyNotes.length || state.chordAnalysis.rhythmHits.length) {
@@ -7500,6 +8093,7 @@ function bindEvents() {
   els.authorInput.addEventListener("input", renderExport);
 
   document.addEventListener("keydown", (event) => {
+    if (state.converterMode === "landing" || state.converterMode === "home") return;
     const target = event.target;
     if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return;
 
@@ -7522,8 +8116,10 @@ function bindEvents() {
 function init() {
   renderKeyOptions();
   syncControls();
+  setAudioResultTab("sheets");
   bindEvents();
   renderAll();
+  loadAuthUser();
 }
 
 init();

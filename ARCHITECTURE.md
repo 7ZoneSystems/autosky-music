@@ -14,7 +14,7 @@
 0014 The app is designed around Sky piano grids, not a normal 88-key piano.
 0015 The app supports composing manually on a virtual 3x5 button grid.
 0016 The app supports importing text sheets in common Sky notation.
-0017 The app supports exporting sheets as ABC-style buttons, numbers, note names, or JSON.
+0017 The app supports exporting sheets as ABC-style buttons, numbers, note names, JSON, or timed JSON.
 0018 The app supports decoding local audio files in the browser.
 0019 The app supports extracting chords, melody, rhythm, foreground, background, and combined sheets.
 0020 The app supports traditional score import from MusicXML, JSON, text, MXL, images, and PDFs.
@@ -86,8 +86,8 @@
 0086 The API responds with refined text, model, and endpoint on success.
 0087 The app shell is a single page.
 0088 The page title is Sky Piano Sheet Maker.
-0089 The topbar contains branding and save/load actions.
-0090 The main workspace contains piano, sheet, key data, audio, score import, and export panels.
+0089 The landing screen explains the tool and opens the converter chooser.
+0090 The selected workspace contains piano, sheet, key data, one converter panel, and export panels.
 0091 The piano panel exposes key, notation, step, and BPM controls.
 0092 The piano panel renders 15 interactive buttons.
 0093 The piano panel supports single-note entry.
@@ -97,14 +97,14 @@
 0097 The sheet panel supports title and transcriber metadata.
 0098 The sheet panel supports rest, bar, line, undo, and clear actions.
 0099 The key data panel documents current Sky key configuration.
-0100 The audio panel contains MP3/audio file selection.
-0101 The audio panel contains analysis window size.
-0102 The audio panel contains minimum chord duration.
-0103 The audio panel contains chord sensitivity.
-0104 The audio panel contains melody sensitivity.
-0105 The audio panel contains engine profile.
-0106 The audio panel contains feel density and playability controls.
-0107 The audio panel contains timing enhancer mode.
+0100 The audio wizard first asks for the audio file only.
+0101 The audio wizard next asks for melody and chord sensitivity.
+0102 The audio wizard next asks for feel, playability, auto BPM/key, and timing enhancer.
+0103 The audio wizard then shows live stage progress.
+0104 The audio wizard rotates Sky music tips while processing.
+0105 The done wizard screen shows the selected Sky key summary.
+0106 The final audio view uses SHEETS, Details, and Timing details tabs.
+0107 The SHEETS tab exposes timed JSON save and the generated sheet.
 0108 The audio panel displays detected key.
 0109 The audio panel displays estimated BPM.
 0110 The audio panel displays chord count.
@@ -161,7 +161,7 @@
 0161 `state.chordAnalysis.combinedEvents` stores combined sheet events.
 0162 `state.chordAnalysis.tempoEstimate` stores BPM estimate.
 0163 `state.chordAnalysis.tuning` stores auto-tune result.
-0164 `state.chordAnalysis.analysisProfile` stores engine profile.
+0164 `state.chordAnalysis.analysisProfile` stores the Song translator mode id.
 0165 `state.chordAnalysis.feelDensity` and `playability` store richness and reduction modes.
 0166 `state.chordAnalysis.enhancerMode` stores timing enhancer mode.
 0167 `state.chordAnalysis.enhancementSummary` stores enhancer metrics.
@@ -318,9 +318,9 @@
 0318 JSON export includes transcriber.
 0319 JSON export includes key id.
 0320 JSON export includes key label.
-0321 JSON export includes BPM.
-0322 JSON export includes notation description.
-0323 JSON export includes events.
+0321 JSON and timed JSON export include BPM.
+0322 Timed JSON export includes beat and second timing.
+0323 JSON and timed JSON export include events.
 0324 `parseAbcToken` parses rest dots.
 0325 `parseAbcToken` parses bars.
 0326 `parseAbcToken` parses ABC row-column tokens.
@@ -397,21 +397,21 @@
 0397 `rebuildCombinedAnalysis` applies timing enhancer mode.
 0398 `rebuildCombinedAnalysis` stores combined events.
 0399 `rebuildCombinedAnalysis` stores enhancement summary.
-0400 Analysis profiles tune processing cost and precision.
-0401 Balanced profile is faster.
-0402 Balanced profile uses melody hop 384.
-0403 Balanced profile uses chord probes at 0.35 and 0.65.
-0404 Balanced profile uses rhythm hop 320.
-0405 Balanced profile uses piano frame 2048.
-0406 Long song profile is default.
-0407 Long song profile uses melody hop 512.
-0408 Long song profile uses chord probes at 0.22, 0.5, and 0.78.
-0409 Long song profile uses rhythm hop 256.
-0410 Long song profile uses piano frame 4096.
-0411 Song translator profile is the default full audio-to-Sky arranger.
-0412 Song translator uses melody hop 256.
-0413 Song translator uses five chord probes.
-0414 Song translator uses rhythm hop 192.
+0400 Song translator is the only exposed audio decoding mode.
+0401 Song translator uses melody hop 256.
+0402 Song translator uses five chord probes.
+0403 Song translator uses rhythm hop 192.
+0404 Song translator uses piano frame 4096.
+0405 Song translator uses piano hop 640.
+0406 Song translator uses batch scheduling for browser responsiveness.
+0407 Song translator supports full-length songs without a separate long-song mode.
+0408 Song translator is the default full audio-to-Sky arranger.
+0409 Song translator uses cached frequency evidence.
+0410 Song translator uses two self-correction passes.
+0411 Song translator remains the single user-facing engine profile.
+0412 Removed engine options do not appear in the UI.
+0413 Removed engine options cannot be selected from saved DOM state.
+0414 Internal recovery helpers remain subordinate to Song translator.
 0415 Song translator uses piano frame 4096 and hop 640.
 0416 Song translator uses frequency caching plus two self-correction passes.
 0417 Feel density controls arrangement richness.
@@ -597,20 +597,20 @@
 0597 `renderChordAnalysis` enables auto-tune when melody exists.
 0598 `renderChordAnalysis` enables melody import when melody is playable.
 0599 `renderChordAnalysis` enables chord import when chords are playable.
-0600 `renderChordAnalysis` writes chord textarea.
-0601 `renderChordAnalysis` writes chord rows.
-0602 `renderChordAnalysis` writes melody textarea.
-0603 `renderChordAnalysis` writes melody rows.
+0600 `renderChordAnalysis` writes chord textarea and visual timing map.
+0601 `renderChordAnalysis` writes chord key chips by time range.
+0602 `renderChordAnalysis` writes melody textarea and visual timing map.
+0603 `renderChordAnalysis` writes melody key chips by time range.
 0604 `renderRhythmAnalysis` writes rhythm count.
-0605 `renderRhythmAnalysis` writes rhythm textarea.
-0606 `renderRhythmAnalysis` writes rhythm rows.
+0605 `renderRhythmAnalysis` writes rhythm textarea and visual timing map.
+0606 `renderRhythmAnalysis` writes rhythm key chips by time range.
 0607 `trackLineForNote` formats foreground and background note rows.
-0608 `renderSeparatedTracks` writes foreground textarea.
-0609 `renderSeparatedTracks` writes background textarea.
+0608 `renderSeparatedTracks` writes foreground textarea and visual map.
+0609 `renderSeparatedTracks` writes background textarea and visual map.
 0610 `renderCombinedAnalysis` writes combined count.
 0611 `renderCombinedAnalysis` enables combined import.
 0612 `renderCombinedAnalysis` writes combined ABC output.
-0613 `renderCombinedAnalysis` writes combined rows.
+0613 `renderCombinedAnalysis` writes combined visual timing map.
 0614 `renderWordingAssignments` writes word-note alignment rows.
 0615 `renderWordingAssignments` enables wording import.
 0616 Playback starts with `playSheet`.
@@ -635,17 +635,17 @@
 0635 `createSkyPianoSample` uses a short attack.
 0636 `createSkyPianoSample` uses fixed duration based on pitch range.
 0637 `createSkyPianoSample` normalizes peak gain.
-0638 `getSkyPianoSample` caches generated samples.
+0638 `precachePlaybackSamples` warms graph and generated samples before playback.
 0639 `playTone` plays a cached buffer source.
 0640 `playTone` routes through tone filter, gain, and shared graph.
 0641 `playTone` does not cut the sample tail to event duration.
 0642 `playTone` supports level scaling.
 0643 `playButton` gives immediate note feedback.
 0644 `flashPianoKey` applies visual playing state.
-0645 `playbackGateForEvent` remains as timing metadata for generated events.
-0646 `playSheet` schedules events using BPM.
-0647 `playSheet` scales chord gain by note count.
-0648 `playSheet` flashes keys during playback.
+0645 Playback uses one-shot sample tails instead of event-duration gates.
+0646 `playSheet` renders one cached audio buffer before playback.
+0647 Offline render scales chord gain by note count.
+0648 `playSheet` flashes keys separately during playback.
 0649 `stopPlayback` clears timers.
 0650 `stopPlayback` stops active buffer sources.
 0651 The app does not use official Sky audio samples.
@@ -655,7 +655,7 @@
 0655 The generated preset is not a bell preset.
 0656 The generated preset is not a harp preset.
 0657 The generated preset is not a hold-sustain synth.
-0658 `bindEvents` wires all UI controls.
+0658 `bindEvents` wires chooser, converter, sheet, and export controls.
 0659 Key change clears pending notes.
 0660 Key change clears refined text.
 0661 Key change clears tuning metadata.
@@ -666,8 +666,8 @@
 0666 BPM change rebuilds combined analysis.
 0667 Single mode clears pending chord.
 0668 Chord mode keeps pending interactions.
-0669 File input change updates audio status.
-0670 Analyze button starts `analyzeAudioFile`.
+0669 Chooser buttons switch between home, audio, and score views.
+0670 Audio wizard analyze button starts `analyzeAudioFile`.
 0671 Auto tune button starts `autoTuneMelody`.
 0672 Refine button starts MiMo refinement.
 0673 Import combined button imports combined events.
@@ -682,7 +682,7 @@
 0682 Minimum chord select change asks for reanalysis.
 0683 Chord sensitivity input change asks for reanalysis.
 0684 Melody sensitivity input change asks for reanalysis.
-0685 Engine profile change asks for reanalysis.
+0685 Engine profile is fixed to Song translator.
 0686 Feel density or playability change rebuilds combined output.
 0687 Enhancer change rebuilds combined output.
 0688 Title input change refreshes export.
@@ -700,7 +700,7 @@
 0700 WAV decoding is accepted by the file input through `audio/*`.
 0701 Audio analysis runs on the main thread in batches.
 0702 Batch processing uses requestAnimationFrame for UI responsiveness.
-0703 Long songs are supported by lower-density frame settings.
+0703 Long songs are supported by Song translator frame settings.
 0704 Song translator mode increases quality at the cost of runtime.
 0705 No Web Worker is currently used.
 0706 No WASM is currently used.
@@ -781,7 +781,7 @@
 0781 Dense songs require user adjustment.
 0782 Song translator mode should be used when quality is more important than speed.
 0783 Balanced mode should be used for quick iteration.
-0784 Long song mode should be used for full-length MP3s.
+0784 Song translator should be used for full-length MP3s.
 0785 Human playability should be used for readable sheets.
 0786 Balanced density should be used for default arrangements.
 0787 Full density should be used for richer but busier arrangements.
@@ -791,7 +791,7 @@
 0791 Current playback preset is generated.
 0792 Current playback preset is dry.
 0793 Current playback preset is exact-pitch.
-0794 Current playback preset is cached.
+0794 Current playback preset is cached and warmed on Play.
 0795 Current playback preset uses fixed tails.
 0796 Current playback preset scales chord loudness.
 0797 Current playback preset is not authoritative Sky audio.
@@ -874,8 +874,8 @@
 0874 Operational guidance: set `MIMO_API_KEY` before testing MiMo.
 0875 Operational guidance: use dedicated Anthropic-compatible MiMo base for API route.
 0876 Operational guidance: use `MIMO_MESSAGES_URL` only for exact endpoint overrides.
-0877 Operational guidance: use Long song profile for four-to-five minute files.
-0878 Operational guidance: use Song translator profile for complex songs.
+0877 Operational guidance: use Song translator for four-to-five minute files.
+0878 Operational guidance: use Song translator for complex songs.
 0879 Operational guidance: use Human or Simple playability when output is too busy.
 0880 Operational guidance: use full density when output feels empty.
 0881 Operational guidance: use auto tune after audio analysis.
@@ -887,7 +887,7 @@
 0887 Operational guidance: import melody for simple song lines.
 0888 Operational guidance: import playable chords for harmonic pads.
 0889 Operational guidance: use wording converter for lyrics-to-note sketches.
-0890 Operational guidance: export JSON for debugging event structure.
+0890 Operational guidance: export timed JSON for debugging timing structure.
 0891 Code maintenance: keep constants near the top of `app.js`.
 0892 Code maintenance: keep DOM selectors in `els`.
 0893 Code maintenance: keep state schema stable.
@@ -951,7 +951,7 @@
 0951 Source reference: Essentia segmentation informs minimum-note ideas.
 0952 Source reference: MiMo, MusicXML, OMR, chord taxonomy, and PDF.js docs inform score import behavior.
 0953 The architecture is intentionally pragmatic.
-0954 The UI is the first screen, not a marketing page.
+0954 The landing screen introduces the tool before the converter chooser.
 0955 The sheet maker remains usable without audio analysis.
 0956 The audio analyzer remains usable without MiMo.
 0957 The serverless route remains isolated from the static composer.
@@ -986,7 +986,7 @@
 0986 The app currently discards analysis on page reload.
 0987 The app currently requires the user to reselect audio after reload.
 0988 The app currently generates playback audio at runtime.
-0989 The app currently caches playback samples during the page session.
+0989 The app currently caches samples and rendered playback during the page session.
 0990 The app currently treats Sky key layouts as static curated data.
 0991 The app currently treats Cb as B major for practical Sky use.
 0992 The app currently treats G flat layout as containing C flat note names.

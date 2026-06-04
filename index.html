@@ -6,27 +6,101 @@
     <title>Sky Piano Sheet Maker</title>
     <link rel="stylesheet" href="styles.css">
   </head>
-  <body>
+  <body class="view-landing">
+    <div id="authShell" class="auth-shell" data-auth-state="loading">
+      <button id="authLoginBtn" class="auth-login" type="button">Login with Google</button>
+      <button id="authUserBtn" class="auth-user" type="button" aria-haspopup="menu" aria-expanded="false" hidden>
+        <img id="authAvatar" alt="" referrerpolicy="no-referrer">
+        <span id="authUserName">Account</span>
+      </button>
+      <div id="authMenu" class="auth-menu" role="menu" hidden>
+        <button id="authMenuHomeBtn" type="button" role="menuitem">Home</button>
+        <button id="authLogoutBtn" type="button" role="menuitem">Logout</button>
+      </div>
+    </div>
+
     <div class="app-frame">
+      <section id="landingScreen" class="landing-screen" aria-labelledby="landingTitle">
+        <div class="landing-copy">
+          <span class="eyebrow">Sky music translator</span>
+          <h1 id="landingTitle">Turn songs and piano sheets into playable Sky music.</h1>
+          <p>Make 15-button COTL sheets with auto key, auto BPM, timed export, playable reductions, and visual timing maps built for Sky's limited grid.</p>
+          <div class="landing-actions">
+            <button id="tryItOutBtn" class="primary-button landing-cta" type="button">Try it out</button>
+          </div>
+          <div class="landing-stats" aria-label="Tool highlights">
+            <div>
+              <strong>15</strong>
+              <span>Sky keys</span>
+            </div>
+            <div>
+              <strong>Auto</strong>
+              <span>BPM + key</span>
+            </div>
+            <div>
+              <strong>Timed</strong>
+              <span>JSON export</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="landing-visual" aria-hidden="true">
+          <div class="landing-scene">
+            <div class="landing-ring landing-ring-a"></div>
+            <div class="landing-ring landing-ring-b"></div>
+            <div class="landing-board">
+              <span></span><span></span><span></span><span></span><span></span>
+              <span></span><span></span><span></span><span></span><span></span>
+              <span></span><span></span><span></span><span></span><span></span>
+            </div>
+            <div class="landing-note-flow">
+              <span>♪</span><span>♫</span><span>♬</span><span>♪</span><span>♩</span>
+              <span>♫</span><span>♪</span><span>♬</span><span>♩</span><span>♪</span>
+            </div>
+            <div class="landing-panel landing-panel-a">
+              <span>Audio</span>
+              <strong>melody + rhythm</strong>
+            </div>
+            <div class="landing-panel landing-panel-b">
+              <span>Sheet</span>
+              <strong>playable timing</strong>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="entryScreen" class="entry-screen" aria-labelledby="entryTitle">
+        <div class="entry-copy">
+          <h1 id="entryTitle">Hi there creators of sky music</h1>
+          <p>you want to convert :</p>
+        </div>
+        <div class="entry-actions" aria-label="Choose converter">
+          <button id="chooseAudioBtn" class="entry-button" type="button">Audio to Sky sheet ?</button>
+          <button id="chooseScoreBtn" class="entry-button" type="button">A piano sheet to Sky sheet ?</button>
+        </div>
+      </section>
+
       <header class="topbar">
         <div class="brand">
-          <div class="brand-mark" aria-hidden="true">
-            <span></span>
-            <span></span>
-            <span></span>
-          </div>
           <div>
             <h1>Sky Piano Sheet Maker</h1>
             <p>15-button COTL instrument grid</p>
           </div>
         </div>
         <div class="top-actions">
+          <button id="homeBtn" class="ghost-button" type="button">Home</button>
           <button id="saveBtn" class="ghost-button" type="button">Save</button>
           <button id="loadBtn" class="ghost-button" type="button">Load</button>
         </div>
       </header>
 
       <main class="workspace">
+        <nav id="audioResultTabs" class="audio-result-tabs" role="tablist" aria-label="Audio output sections">
+          <button id="audioTabSheetsBtn" class="audio-result-tab active" type="button" role="tab" aria-selected="true" data-audio-tab="sheets">SHEETS</button>
+          <button id="audioTabDetailsBtn" class="audio-result-tab" type="button" role="tab" aria-selected="false" data-audio-tab="details">Details</button>
+          <button id="audioTabTimingBtn" class="audio-result-tab" type="button" role="tab" aria-selected="false" data-audio-tab="timing">Timing details</button>
+        </nav>
+
         <section class="panel piano-panel" aria-labelledby="pianoTitle">
           <div class="panel-heading">
             <div>
@@ -139,6 +213,100 @@
           </div>
         </aside>
 
+        <section id="audioWizardPanel" class="panel audio-wizard-panel" aria-labelledby="audioWizardTitle">
+          <div class="audio-wizard-step is-active" data-audio-step="file">
+            <span class="eyebrow">Audio to Sky sheet</span>
+            <h2 id="audioWizardTitle">ohk now lets grab your audio file and attach it here</h2>
+            <label class="wizard-file-box">
+              <span>Audio file</span>
+              <input id="audioWizardFileInput" type="file" accept="audio/mpeg,audio/mp3,audio/*">
+            </label>
+          </div>
+
+          <div class="audio-wizard-step" data-audio-step="sensitivity">
+            <span class="eyebrow">nicee</span>
+            <h2>now ohk lets now set the sensitivity of your sheet generation</h2>
+            <div class="wizard-control-grid">
+              <label>
+                <span>Melody sensitivity</span>
+                <input id="wizardMelodySensitivityInput" type="range" min="0.08" max="0.28" step="0.01" value="0.15">
+              </label>
+              <label>
+                <span>Chord sensitivity</span>
+                <input id="wizardChordSensitivityInput" type="range" min="0.52" max="0.86" step="0.02" value="0.62">
+              </label>
+            </div>
+            <button id="audioSensitivityNextBtn" class="primary-button" type="button">Continue</button>
+          </div>
+
+          <div class="audio-wizard-step" data-audio-step="feel">
+            <span class="eyebrow">nicee</span>
+            <h2>now lets complete this process by feel, playability, auto BPM, auto key, and timing enhancer</h2>
+            <div class="wizard-control-grid">
+              <label>
+                <span>Feel (continuity of song)</span>
+                <select id="wizardFeelDensitySelect">
+                  <option value="sparse">Sparse</option>
+                  <option value="balanced" selected>Balanced</option>
+                  <option value="full">Full</option>
+                </select>
+              </label>
+              <label>
+                <span>Playability</span>
+                <select id="wizardPlayabilitySelect">
+                  <option value="simple">Simple 1-key</option>
+                  <option value="human" selected>Human 2-key</option>
+                  <option value="balanced">Balanced 3-key</option>
+                  <option value="rich">Rich 4-key</option>
+                </select>
+              </label>
+              <label>
+                <span>BPM fallback</span>
+                <input id="wizardBpmInput" type="number" min="30" max="240" value="96">
+              </label>
+              <label class="wizard-check">
+                <input id="wizardAutoBpmInput" type="checkbox" checked>
+                <span>Auto BPM after analysis</span>
+              </label>
+              <label class="wizard-check">
+                <input id="wizardAutoKeyInput" type="checkbox" checked>
+                <span>Auto key after analysis</span>
+              </label>
+              <label>
+                <span>Timing enhancer</span>
+                <select id="wizardEnhancerSelect">
+                  <option value="threePhase" selected>Three phase</option>
+                  <option value="gentle">Gentle</option>
+                  <option value="off">Off</option>
+                </select>
+              </label>
+            </div>
+            <button id="audioWizardAnalyzeBtn" class="primary-button" type="button">Start checking</button>
+          </div>
+
+          <div class="audio-wizard-step" data-audio-step="processing">
+            <span class="eyebrow">nicee</span>
+            <h2>lemme just check what i have got and continue process</h2>
+            <div class="wizard-progress-shell" aria-live="polite">
+              <div class="wizard-progress-track">
+                <div id="audioWizardProgressFill" class="wizard-progress-fill"></div>
+              </div>
+              <p id="audioWizardStageText">Preparing analysis</p>
+              <p id="audioWizardTipText">Sky music tip: simple readable sheets usually feel better than crowded ones.</p>
+            </div>
+          </div>
+
+          <div class="audio-wizard-step" data-audio-step="done">
+            <span class="eyebrow">key check</span>
+            <h2 id="audioWizardKeyTitle">key auto selected was C major</h2>
+            <p id="audioWizardKeyDescription">The selected Sky key will be shown here after analysis.</p>
+            <div class="wizard-result-actions">
+              <button id="audioShowOutputBtn" class="primary-button" type="button">Continue to final output</button>
+              <button id="audioRestartWizardBtn" class="ghost-button" type="button">Use another audio</button>
+            </div>
+          </div>
+        </section>
+
         <section class="panel audio-panel" aria-labelledby="audioTitle">
           <div class="panel-heading">
             <div>
@@ -155,7 +323,7 @@
             </div>
           </div>
 
-          <div class="audio-grid">
+          <div class="audio-grid audio-setup-grid">
             <label>
               <span>MP3 file</span>
               <input id="audioFileInput" type="file" accept="audio/mpeg,audio/mp3,audio/*">
@@ -190,10 +358,6 @@
               <span>Engine</span>
               <select id="analysisProfileSelect">
                 <option value="translator" selected>Song translator</option>
-                <option value="balanced">Balanced</option>
-                <option value="long">Long song</option>
-                <option value="beast">Beast</option>
-                <option value="neural">Neural lattice</option>
               </select>
             </label>
             <label>
@@ -268,6 +432,12 @@
             </div>
           </div>
 
+          <div class="timing-map-heading">
+            <span class="eyebrow">Timing details</span>
+            <h3>All maps</h3>
+            <p>Each row shows where the detected musical part lands in the song and which Sky keys are used there.</p>
+          </div>
+
           <div class="chord-output-grid">
             <label>
               <span>Minimal chord format</span>
@@ -310,6 +480,14 @@
               <span>Background pulse track</span>
               <textarea id="backgroundOutputText" spellcheck="false" readonly></textarea>
             </label>
+            <div>
+              <span class="eyebrow">Foreground map</span>
+              <div id="foregroundResultList" class="foreground-result-list"></div>
+            </div>
+            <div>
+              <span class="eyebrow">Background map</span>
+              <div id="backgroundResultList" class="background-result-list"></div>
+            </div>
           </div>
 
           <div class="combined-output-grid">
@@ -448,13 +626,13 @@
           <div class="panel-heading">
             <div>
               <h2 id="exportTitle">Import / Export</h2>
-              <p>ABC1-5, numbers, note names, JSON</p>
+              <p id="exportSubtitle">ABC1-5, numbers, note names, JSON, timed JSON</p>
             </div>
             <button id="copyExportBtn" class="ghost-button" type="button">Copy export</button>
           </div>
 
           <div class="export-grid">
-            <label>
+            <label class="export-import-field">
               <span>Paste sheet text</span>
               <textarea id="importText" spellcheck="false" placeholder="A1A3B3 . B4 B5"></textarea>
             </label>
@@ -462,16 +640,17 @@
               <button id="importAbcBtn" class="primary-button" type="button">Import ABC1-5</button>
               <button id="importNumbersBtn" class="ghost-button" type="button">Import numbers</button>
             </div>
-            <label>
+            <label class="export-format-field">
               <span>Export format</span>
               <select id="exportFormat">
                 <option value="abc">ABC1-5</option>
                 <option value="numbers">Numbers</option>
                 <option value="notes">Sky notes</option>
                 <option value="json">JSON</option>
+                <option value="timed-json">Timed JSON</option>
               </select>
             </label>
-            <label>
+            <label class="export-output-field">
               <span>Generated output</span>
               <textarea id="exportText" spellcheck="false" readonly></textarea>
             </label>
