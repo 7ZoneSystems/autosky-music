@@ -171,6 +171,7 @@ module.exports = async function handler(req, res) {
     const melodyLines = Array.isArray(body.melodyLines) ? body.melodyLines.slice(0, 500) : [];
     const rhythmLines = Array.isArray(body.rhythmLines) ? body.rhythmLines.slice(0, 500) : [];
     const combinedLines = Array.isArray(body.combinedLines) ? body.combinedLines.slice(0, 500) : [];
+    const combinedStats = body.combinedStats && typeof body.combinedStats === "object" ? body.combinedStats : {};
     if (!chordLines.length) {
       res.status(400).json({ error: "No chord lines supplied" });
       return;
@@ -183,6 +184,10 @@ module.exports = async function handler(req, res) {
       "Keep output compact and deterministic.",
       "Merge repeated adjacent chords if the chord name and Sky buttons are the same.",
       "Use melody/rhythm/combined context only to avoid obviously wrong harmonic changes.",
+      "Treat the task as a playable piano reduction, not a literal transcription.",
+      "Prefer melody plus one nearby support tone for human modes; avoid dense clusters unless the target explicitly says Rich.",
+      "Prefer stable harmonic rhythm over every detected micro-change.",
+      "When a segment is too busy, keep the chord identity and reduce repeated pulses into one readable Sky action.",
       "Preserve timestamps, chord names, and Sky button mappings when they are useful.",
       "Mark unplayable rows as 'rest' or 'not in selected Sky key'.",
       "Return only a minimal chord format, one line per segment.",
@@ -191,6 +196,10 @@ module.exports = async function handler(req, res) {
       `Selected Sky key: ${body.selectedSkyKey || "unknown"}`,
       `Detected audio key: ${body.detectedKey || "unknown"}`,
       `Duration seconds: ${Number(body.duration || 0).toFixed(2)}`,
+      `Playability target: ${body.playabilityLabel || body.playability || "Human 2-key"}`,
+      `Combined note events: ${Number(combinedStats.noteEvents || 0)}`,
+      `Combined max keys seen: ${Number(combinedStats.maxKeysSeen || 0)}`,
+      `Feel density: ${combinedStats.feelDensity || "unknown"}`,
       "",
       "Raw detected chord lines:",
       chordLines.join("\n"),

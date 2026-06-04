@@ -189,9 +189,11 @@
             <label>
               <span>Engine</span>
               <select id="analysisProfileSelect">
+                <option value="translator" selected>Song translator</option>
                 <option value="balanced">Balanced</option>
-                <option value="long" selected>Long song</option>
+                <option value="long">Long song</option>
                 <option value="beast">Beast</option>
+                <option value="neural">Neural lattice</option>
               </select>
             </label>
             <label>
@@ -200,6 +202,15 @@
                 <option value="sparse">Sparse</option>
                 <option value="balanced" selected>Balanced</option>
                 <option value="full">Full</option>
+              </select>
+            </label>
+            <label>
+              <span>Playability</span>
+              <select id="playabilitySelect">
+                <option value="simple">Simple 1-key</option>
+                <option value="human" selected>Human 2-key</option>
+                <option value="balanced">Balanced 3-key</option>
+                <option value="rich">Rich 4-key</option>
               </select>
             </label>
             <label>
@@ -242,6 +253,14 @@
             <div>
               <span class="eyebrow">Playable in Sky key</span>
               <strong id="playableCountText">0</strong>
+            </div>
+            <div>
+              <span class="eyebrow">Input/output match</span>
+              <strong id="matchScoreText">-</strong>
+            </div>
+            <div>
+              <span class="eyebrow">Self corrections</span>
+              <strong id="recoveredCountText">0</strong>
             </div>
             <div>
               <span class="eyebrow">Duration</span>
@@ -317,6 +336,111 @@
                 <button id="importWordingBtn" class="ghost-button" type="button" disabled>Import wording</button>
               </div>
             </div>
+          </div>
+        </section>
+
+        <section class="panel score-panel" aria-labelledby="scoreTitle">
+          <div class="panel-heading">
+            <div>
+              <h2 id="scoreTitle">Score Sheet To Sky</h2>
+              <p id="scoreStatus">No score loaded</p>
+            </div>
+            <div class="transport">
+              <button id="analyzeScoreBtn" class="primary-button" type="button">Analyze score</button>
+              <button id="importScoreBtn" class="ghost-button" type="button" disabled>Import score</button>
+            </div>
+          </div>
+
+          <div class="score-grid">
+            <label>
+              <span>Score file</span>
+              <input id="scoreFileInput" type="file" accept="image/*,application/pdf,.pdf,.xml,.musicxml,.mxl,.json,.txt,.text">
+            </label>
+            <label>
+              <span>Sky key plan</span>
+              <select id="scoreKeyStrategySelect">
+                <option value="auto" selected>Auto choose</option>
+                <option value="selected">Use current key</option>
+                <option value="score">Prefer score key</option>
+              </select>
+            </label>
+            <label>
+              <span>Arrangement</span>
+              <select id="scoreArrangementSelect">
+                <option value="melody">Melody first</option>
+                <option value="balanced" selected>Balanced</option>
+                <option value="full">Full chord</option>
+              </select>
+            </label>
+            <label>
+              <span>Max keys</span>
+              <select id="scoreMaxKeysSelect">
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4" selected>4</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="score-stats">
+            <div>
+              <span class="eyebrow">Sky key</span>
+              <strong id="scoreKeyText">-</strong>
+            </div>
+            <div>
+              <span class="eyebrow">BPM</span>
+              <strong id="scoreBpmText">-</strong>
+            </div>
+            <div>
+              <span class="eyebrow">Input notes</span>
+              <strong id="scoreNoteCountText">0</strong>
+            </div>
+            <div>
+              <span class="eyebrow">Chords</span>
+              <strong id="scoreChordCountText">0</strong>
+            </div>
+            <div>
+              <span class="eyebrow">Texture</span>
+              <strong id="scoreTextureText">-</strong>
+            </div>
+            <div>
+              <span class="eyebrow">Simul. groups</span>
+              <strong id="scoreSimultaneousCountText">0</strong>
+            </div>
+            <div>
+              <span class="eyebrow">Substitutions</span>
+              <strong id="scoreSubstitutionCountText">0</strong>
+            </div>
+            <div>
+              <span class="eyebrow">Split chords</span>
+              <strong id="scoreSplitCountText">0</strong>
+            </div>
+            <div>
+              <span class="eyebrow">Boxes</span>
+              <strong id="scoreCombinedCountText">0</strong>
+            </div>
+            <div>
+              <span class="eyebrow">Source</span>
+              <strong id="scoreSourceText">-</strong>
+            </div>
+          </div>
+
+          <div class="score-output-grid">
+            <label>
+              <span>Score Sky format</span>
+              <textarea id="scoreOutputText" spellcheck="false" readonly></textarea>
+            </label>
+            <div>
+              <span class="eyebrow">Score map</span>
+              <div id="scoreResultList" class="score-result-list"></div>
+            </div>
+          </div>
+
+          <div class="score-warning-grid">
+            <label>
+              <span>OMR / mapping notes</span>
+              <textarea id="scoreWarningsText" spellcheck="false" readonly></textarea>
+            </label>
           </div>
         </section>
 

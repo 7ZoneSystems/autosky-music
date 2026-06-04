@@ -207,6 +207,7 @@ const NOTE_TO_PC = {
   "B#": 0
 };
 const CHORD_TEMPLATES = [
+  { suffix: "5", name: "power", intervals: [0, 7] },
   { suffix: "", name: "major", intervals: [0, 4, 7] },
   { suffix: "m", name: "minor", intervals: [0, 3, 7] },
   { suffix: "sus2", name: "sus2", intervals: [0, 2, 7] },
@@ -216,14 +217,21 @@ const CHORD_TEMPLATES = [
   { suffix: "7", name: "dominant seventh", intervals: [0, 4, 7, 10] },
   { suffix: "maj7", name: "major seventh", intervals: [0, 4, 7, 11] },
   { suffix: "m7", name: "minor seventh", intervals: [0, 3, 7, 10] },
+  { suffix: "mMaj7", name: "minor major seventh", intervals: [0, 3, 7, 11] },
+  { suffix: "dim7", name: "diminished seventh", intervals: [0, 3, 6, 9] },
+  { suffix: "m7b5", name: "half diminished seventh", intervals: [0, 3, 6, 10] },
   { suffix: "6", name: "major sixth", intervals: [0, 4, 7, 9] },
-  { suffix: "m6", name: "minor sixth", intervals: [0, 3, 7, 9] }
+  { suffix: "m6", name: "minor sixth", intervals: [0, 3, 7, 9] },
+  { suffix: "add9", name: "add ninth", intervals: [0, 4, 7, 14] },
+  { suffix: "madd9", name: "minor add ninth", intervals: [0, 3, 7, 14] }
 ];
 const MAJOR_KEY_PROFILE = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88];
 const ANALYSIS_MIDI_START = 36;
 const ANALYSIS_MIDI_END = 88;
 const PIANO_MIDI_START = 40;
 const PIANO_MIDI_END = 88;
+const NEURAL_LATTICE_MIN_MIDI = 38;
+const NEURAL_LATTICE_MAX_MIDI = 92;
 const MELODY_TARGET_RATE = 8000;
 const MELODY_FRAME_LENGTH = 1024;
 const MELODY_HOP_LENGTH = 256;
@@ -236,6 +244,20 @@ const RHYTHM_FRAME_LENGTH = 1024;
 const RHYTHM_HOP_LENGTH = 256;
 const COMBINED_BEATS_PER_BAR = 4;
 const WORD_TOKEN_PATTERN = /[A-Za-z0-9]+(?:'[A-Za-z0-9]+)?|[^\sA-Za-z0-9]/g;
+const SCORE_PDF_JS_URL = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.mjs";
+const SCORE_PDF_WORKER_URL = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.mjs";
+const SCORE_MAX_OMR_PAGES = 8;
+const SCORE_MAX_EVENTS = 3200;
+const LOCAL_SCORE_OMR_API = "http://127.0.0.1:5173/api/sheet-omr";
+const VISION_SCORE_MAX_WIDTH = 1700;
+const VISION_SCORE_MAX_HEIGHT = 2200;
+const VISION_SCORE_MAX_SCALE = 2.15;
+const VISION_SCORE_DEFAULT_BEATS_PER_BAR = 4;
+const SCORE_ARRANGEMENT_LIMITS = {
+  melody: { maxCombinedEvents: 1500, harmonyShare: 0.18, bassShare: 0.28, splitThreshold: 4 },
+  balanced: { maxCombinedEvents: 2300, harmonyShare: 0.58, bassShare: 0.64, splitThreshold: 4 },
+  full: { maxCombinedEvents: 3200, harmonyShare: 0.88, bassShare: 0.9, splitThreshold: 3 }
+};
 const TWO_PI = Math.PI * 2;
 const KEY_ALIASES = new Map();
 KEY_CONFIGS.forEach((config) => {
@@ -260,15 +282,47 @@ const state = {
     melodyNotes: [],
     foregroundNotes: [],
     backgroundNotes: [],
+    neuralNotes: [],
     rhythmHits: [],
     combinedEvents: [],
     tempoEstimate: null,
     tuning: null,
-    analysisProfile: "long",
+    analysisProfile: "translator",
     feelDensity: "balanced",
+    playability: "human",
     enhancerMode: "threePhase",
     enhancementSummary: null,
+    quality: null,
+    correctionSummary: null,
+    inputSignature: null,
     wordingAssignments: []
+  },
+  scoreAnalysis: {
+    fileName: "",
+    sourceType: "",
+    title: "",
+    bpm: null,
+    keyGuess: null,
+    skyKeyId: null,
+    noteCount: 0,
+    chordCount: 0,
+    simultaneousCount: 0,
+    denseChordCount: 0,
+    texture: "",
+    complexity: "",
+    substitutionCount: 0,
+    splitCount: 0,
+    combinedEvents: [],
+    melodyNotes: [],
+    backgroundNotes: [],
+    chordSegments: [],
+    rhythmHits: [],
+    warnings: [],
+    mappings: [],
+    classification: null,
+    confidence: null,
+    omrModel: "",
+    durationBeats: 0
   }
 };
 
@@ -320,6 +374,7 @@ const els = {
   melodySensitivityInput: document.querySelector("#melodySensitivityInput"),
   analysisProfileSelect: document.querySelector("#analysisProfileSelect"),
   feelDensitySelect: document.querySelector("#feelDensitySelect"),
+  playabilitySelect: document.querySelector("#playabilitySelect"),
   enhancerSelect: document.querySelector("#enhancerSelect"),
   audioStatus: document.querySelector("#audioStatus"),
   detectedKeyText: document.querySelector("#detectedKeyText"),
@@ -331,6 +386,8 @@ const els = {
   rhythmCountText: document.querySelector("#rhythmCountText"),
   combinedCountText: document.querySelector("#combinedCountText"),
   playableCountText: document.querySelector("#playableCountText"),
+  matchScoreText: document.querySelector("#matchScoreText"),
+  recoveredCountText: document.querySelector("#recoveredCountText"),
   audioDurationText: document.querySelector("#audioDurationText"),
   chordOutputText: document.querySelector("#chordOutputText"),
   chordResultList: document.querySelector("#chordResultList"),
@@ -345,13 +402,35 @@ const els = {
   wordingInputText: document.querySelector("#wordingInputText"),
   alignWordingBtn: document.querySelector("#alignWordingBtn"),
   importWordingBtn: document.querySelector("#importWordingBtn"),
-  wordingResultList: document.querySelector("#wordingResultList")
+  wordingResultList: document.querySelector("#wordingResultList"),
+  scoreFileInput: document.querySelector("#scoreFileInput"),
+  analyzeScoreBtn: document.querySelector("#analyzeScoreBtn"),
+  importScoreBtn: document.querySelector("#importScoreBtn"),
+  scoreKeyStrategySelect: document.querySelector("#scoreKeyStrategySelect"),
+  scoreArrangementSelect: document.querySelector("#scoreArrangementSelect"),
+  scoreMaxKeysSelect: document.querySelector("#scoreMaxKeysSelect"),
+  scoreStatus: document.querySelector("#scoreStatus"),
+  scoreKeyText: document.querySelector("#scoreKeyText"),
+  scoreBpmText: document.querySelector("#scoreBpmText"),
+  scoreNoteCountText: document.querySelector("#scoreNoteCountText"),
+  scoreChordCountText: document.querySelector("#scoreChordCountText"),
+  scoreTextureText: document.querySelector("#scoreTextureText"),
+  scoreSimultaneousCountText: document.querySelector("#scoreSimultaneousCountText"),
+  scoreSubstitutionCountText: document.querySelector("#scoreSubstitutionCountText"),
+  scoreSplitCountText: document.querySelector("#scoreSplitCountText"),
+  scoreCombinedCountText: document.querySelector("#scoreCombinedCountText"),
+  scoreSourceText: document.querySelector("#scoreSourceText"),
+  scoreOutputText: document.querySelector("#scoreOutputText"),
+  scoreResultList: document.querySelector("#scoreResultList"),
+  scoreWarningsText: document.querySelector("#scoreWarningsText")
 };
 
 let audioContext;
 let scheduledTimers = [];
 let activeOscillators = [];
 let audioGraph = null;
+let playbackScheduler = null;
+let playbackSessionId = 0;
 const skyPianoSampleCache = new Map();
 
 function currentConfig() {
@@ -390,6 +469,12 @@ function noteNameForPc(pc, keyId = state.keyId) {
 function chordLabel(rootPc, template, keyId = state.keyId) {
   if (!template) return "N.C.";
   return `${noteNameForPc(rootPc, keyId)}${template.suffix}`;
+}
+
+function chordLabelWithBass(rootPc, template, bassPc, keyId = state.keyId) {
+  const label = chordLabel(rootPc, template, keyId);
+  if (label === "N.C." || !Number.isFinite(bassPc) || normalizePc(bassPc) === normalizePc(rootPc)) return label;
+  return `${label}/${noteNameForPc(bassPc, keyId)}`;
 }
 
 function midiToFrequency(midi) {
@@ -767,14 +852,127 @@ function addCombinedAnchor(anchors, anchor) {
   });
 }
 
-function collapseCombinedAnchors(anchors, density) {
+function anchorPriority(anchor) {
+  const kind = anchor.kind || "";
+  const strength = Math.max(0, Math.min(1, anchor.strength || 0));
+  if (kind.includes("melody")) return 5 + strength;
+  if (kind.includes("theme")) return 4 + strength;
+  if (kind.includes("background-chord")) return 2.8 + strength;
+  if (kind.includes("rhythm")) return 2.4 + strength;
+  if (kind.includes("background")) return 2 + strength;
+  return 1 + strength;
+}
+
+function trimAnchorNotesForPlayability(notes, melodyButtonId, playability) {
+  const settings = playabilitySettings(playability);
+  const unique = [...new Set(notes)]
+    .filter((buttonId) => Number.isInteger(buttonId) && buttonId >= 1 && buttonId <= 15);
+  const limit = Math.max(1, settings.maxSimultaneous);
+  if (unique.length <= limit) return unique.sort((a, b) => a - b);
+
+  const anchorButton = melodyButtonId || 8;
+  return unique
+    .sort((a, b) => {
+      const aMelody = a === melodyButtonId ? -1 : 0;
+      const bMelody = b === melodyButtonId ? -1 : 0;
+      if (aMelody !== bMelody) return aMelody - bMelody;
+      const aDistance = Math.abs(a - anchorButton);
+      const bDistance = Math.abs(b - anchorButton);
+      if (aDistance !== bDistance) return aDistance - bDistance;
+      return Math.abs(a - 8) - Math.abs(b - 8);
+    })
+    .slice(0, limit)
+    .sort((a, b) => a - b);
+}
+
+function sameAnchorNotes(a, b) {
+  if (!a || !b || a.length !== b.length) return false;
+  return a.every((item, index) => item === b[index]);
+}
+
+function compressAnchorsForPlayability(anchors, density, playability, beatSeconds) {
+  if (!anchors.length) return anchors;
+
+  const densitySettings = feelDensitySettings(density);
+  const settings = playabilitySettings(playability);
+  const minMelodyGap = settings.minMelodyGapBeats * beatSeconds;
+  const minSupportGap = settings.minSupportGapBeats * beatSeconds;
+  const backgroundGap = settings.backgroundEveryBeats * beatSeconds;
+  const rhythmGap = settings.rhythmEveryBeats * beatSeconds;
+  const trimmed = anchors
+    .map((anchor) => ({
+      ...anchor,
+      notes: trimAnchorNotesForPlayability(anchor.notes, anchor.melodyButtonId, playability)
+    }))
+    .filter((anchor) => anchor.notes.length)
+    .sort((a, b) => a.time - b.time || anchorPriority(b) - anchorPriority(a));
+
+  const kept = [];
+  let lastMelodyTime = -Infinity;
+  let lastSupportTime = -Infinity;
+  let lastBackgroundTime = -Infinity;
+  let lastRhythmTime = -Infinity;
+  let lastMelodyNotes = null;
+
+  trimmed.forEach((anchor) => {
+    const kind = anchor.kind || "";
+    const isMelody = kind.includes("melody");
+    const isTheme = kind.includes("theme");
+    const isBackground = kind.includes("background");
+    const isRhythm = kind.includes("rhythm");
+    const strength = Math.max(0, anchor.strength || 0);
+
+    if (isMelody) {
+      const tooClose = anchor.time - lastMelodyTime < minMelodyGap;
+      const duplicate = sameAnchorNotes(anchor.notes, lastMelodyNotes);
+      if (tooClose && (duplicate || strength < 0.72)) return;
+      kept.push(anchor);
+      lastMelodyTime = anchor.time;
+      lastMelodyNotes = anchor.notes;
+      return;
+    }
+
+    if (isBackground && !isTheme && anchor.time - lastBackgroundTime < backgroundGap) return;
+    if (isRhythm && anchor.time - lastRhythmTime < rhythmGap) return;
+    if (anchor.time - lastSupportTime < minSupportGap && strength < settings.weakAnchorThreshold) return;
+
+    const last = kept[kept.length - 1];
+    const collapseWindow = Math.max(densitySettings.collapseSeconds, beatSeconds * 0.08);
+    if (last && anchor.time - last.time <= collapseWindow) {
+      const mergedNotes = trimAnchorNotesForPlayability(
+        [...last.notes, ...anchor.notes],
+        last.melodyButtonId || anchor.melodyButtonId,
+        playability
+      );
+      last.melodyButtonId = last.melodyButtonId || anchor.melodyButtonId || null;
+      last.notes = mergedNotes;
+      last.duration = Math.max(last.duration, anchor.duration);
+      last.strength = Math.max(last.strength, anchor.strength);
+      last.kind = last.kind.includes(anchor.kind) ? last.kind : `${last.kind}+${anchor.kind}`;
+      last.label = last.label.includes(anchor.label) ? last.label : `${last.label}/${anchor.label}`;
+    } else {
+      kept.push(anchor);
+    }
+
+    lastSupportTime = anchor.time;
+    if (isBackground) lastBackgroundTime = anchor.time;
+    if (isRhythm) lastRhythmTime = anchor.time;
+  });
+
+  return kept;
+}
+
+function collapseCombinedAnchors(anchors, density, playability = "human") {
   const settings = feelDensitySettings(density);
+  const playSettings = playabilitySettings(playability);
+  const maxSimultaneous = Math.min(settings.maxSimultaneous, playSettings.maxSimultaneous);
   const collapsed = [];
   anchors
     .sort((a, b) => a.time - b.time || b.strength - a.strength)
     .forEach((anchor) => {
       const last = collapsed[collapsed.length - 1];
       if (last && anchor.time - last.time <= settings.collapseSeconds) {
+        last.melodyButtonId = last.melodyButtonId || anchor.melodyButtonId || null;
         const merged = [...new Set([...last.notes, ...anchor.notes])];
         merged.sort((a, b) => {
           const aMelody = a === last.melodyButtonId ? -1 : 0;
@@ -782,7 +980,7 @@ function collapseCombinedAnchors(anchors, density) {
           if (aMelody !== bMelody) return aMelody - bMelody;
           return Math.abs(a - 8) - Math.abs(b - 8);
         });
-        last.notes = merged.slice(0, settings.maxSimultaneous).sort((a, b) => a - b);
+        last.notes = trimAnchorNotesForPlayability(merged, last.melodyButtonId, playability).slice(0, maxSimultaneous);
         last.duration = Math.max(last.duration, anchor.duration);
         last.strength = Math.max(last.strength, anchor.strength);
         last.kind = last.kind.includes(anchor.kind) ? last.kind : `${last.kind}+${anchor.kind}`;
@@ -797,6 +995,14 @@ function collapseCombinedAnchors(anchors, density) {
 function thinCombinedAnchors(anchors, maxCount) {
   if (anchors.length <= maxCount) return anchors;
   const melodyAnchors = anchors.filter((anchor) => anchor.kind.includes("melody"));
+  if (melodyAnchors.length >= maxCount) {
+    const selected = [];
+    const step = melodyAnchors.length / maxCount;
+    for (let index = 0; index < maxCount; index += 1) {
+      selected.push(melodyAnchors[Math.floor(index * step)]);
+    }
+    return selected.sort((a, b) => a.time - b.time);
+  }
   const rhythmAnchors = anchors
     .filter((anchor) => !anchor.kind.includes("melody"))
     .sort((a, b) => b.strength - a.strength);
@@ -804,10 +1010,13 @@ function thinCombinedAnchors(anchors, maxCount) {
   return [...melodyAnchors, ...rhythmAnchors.slice(0, keepRhythm)].sort((a, b) => a.time - b.time);
 }
 
-function buildCombinedArrangement(melodyNotes, chordSegments, rhythmHits, tempoEstimate, density, backgroundNotes = []) {
+function buildCombinedArrangement(melodyNotes, chordSegments, rhythmHits, tempoEstimate, density, backgroundNotes = [], playability = "human") {
   const settings = feelDensitySettings(density);
+  const playSettings = playabilitySettings(playability);
   const beatSeconds = tempoEstimate && tempoEstimate.bpm ? 60 / tempoEstimate.bpm : 60 / Math.max(30, Number(state.bpm) || 96);
   const anchors = [];
+  const harmonyButtons = Math.min(settings.harmonyButtons, playSettings.harmonyButtons);
+  const rhythmButtons = Math.min(settings.rhythmButtons, playSettings.rhythmButtons);
 
   melodyNotes.forEach((note) => {
     const mapping = melodyMapping(note);
@@ -816,10 +1025,10 @@ function buildCombinedArrangement(melodyNotes, chordSegments, rhythmHits, tempoE
     const segment = findChordSegmentAtTime(chordSegments, note.start);
     const nearbyHit = nearestRhythmHit(note.start, rhythmHits, Math.max(settings.collapseSeconds, beatSeconds * 0.18));
     const notes = [mapping.buttonId];
-    const addHarmony = nearbyHit && nearbyHit.strength >= settings.melodyHarmonyStrength;
+    const addHarmony = harmonyButtons > 0 && nearbyHit && nearbyHit.strength >= Math.min(0.94, settings.melodyHarmonyStrength + playSettings.melodyHarmonyBoost);
     if (addHarmony) {
       chordAccentButtons(segment, density, mapping.buttonId)
-        .slice(0, settings.harmonyButtons)
+        .slice(0, harmonyButtons)
         .forEach((buttonId) => notes.push(buttonId));
     }
 
@@ -837,7 +1046,7 @@ function buildCombinedArrangement(melodyNotes, chordSegments, rhythmHits, tempoE
   backgroundNotes.forEach((note) => {
     if ((note.confidence || 0) < 0.2 && density !== "full") return;
     const segment = findChordSegmentAtTime(chordSegments, note.start);
-    const buttons = chordAccentButtons(segment, density, note.buttonId).slice(0, settings.harmonyButtons);
+    const buttons = chordAccentButtons(segment, density, note.buttonId).slice(0, harmonyButtons);
     const notes = [note.buttonId, ...buttons];
     addCombinedAnchor(anchors, {
       time: note.start,
@@ -854,7 +1063,7 @@ function buildCombinedArrangement(melodyNotes, chordSegments, rhythmHits, tempoE
     if (hit.strength < settings.rhythmThreshold) return;
     const segment = findChordSegmentAtTime(chordSegments, hit.time);
     const buttons = chordAccentButtons(segment, density)
-      .slice(0, settings.rhythmButtons);
+      .slice(0, rhythmButtons);
     if (!buttons.length) return;
 
     addCombinedAnchor(anchors, {
@@ -870,9 +1079,9 @@ function buildCombinedArrangement(melodyNotes, chordSegments, rhythmHits, tempoE
   if (anchors.length < 2 && chordSegments.length) {
     chordSegments.forEach((segment) => {
       if (segment.label === "N.C.") return;
-      const buttons = chordAccentButtons(segment, density).slice(0, Math.max(1, settings.rhythmButtons));
+      const buttons = chordAccentButtons(segment, density).slice(0, Math.max(1, rhythmButtons));
       if (!buttons.length) return;
-      const pulseStep = density === "sparse" ? beatSeconds * 4 : beatSeconds * 2;
+      const pulseStep = beatSeconds * playSettings.chordPulseBeats;
       for (let time = segment.start; time < segment.end; time += pulseStep) {
         addCombinedAnchor(anchors, {
           time,
@@ -888,7 +1097,9 @@ function buildCombinedArrangement(melodyNotes, chordSegments, rhythmHits, tempoE
 
   if (!anchors.length) return [];
 
-  const collapsed = thinCombinedAnchors(collapseCombinedAnchors(anchors, density), settings.maxCombinedEvents);
+  const playableAnchors = compressAnchorsForPlayability(anchors, density, playability, beatSeconds);
+  const maxCombinedEvents = Math.min(settings.maxCombinedEvents, playSettings.maxCombinedEvents);
+  const collapsed = thinCombinedAnchors(collapseCombinedAnchors(playableAnchors, density, playability), maxCombinedEvents);
   const events = [];
   const stopThreshold = Math.max(0.09, Math.min(0.5, beatSeconds * 0.42));
   let cursor = collapsed[0].time;
@@ -935,6 +1146,7 @@ function rebuildCombinedAnalysis() {
   const analysis = state.chordAnalysis;
   if (!analysis) return;
   const density = els.feelDensitySelect ? els.feelDensitySelect.value : analysis.feelDensity || "balanced";
+  const playability = els.playabilitySelect ? els.playabilitySelect.value : analysis.playability || "human";
   const enhancerMode = els.enhancerSelect ? els.enhancerSelect.value : analysis.enhancerMode || "threePhase";
   const rawEvents = buildCombinedArrangement(
     analysis.melodyNotes || [],
@@ -942,10 +1154,12 @@ function rebuildCombinedAnalysis() {
     analysis.rhythmHits || [],
     analysis.tempoEstimate,
     density,
-    analysis.backgroundNotes || []
+    analysis.backgroundNotes || [],
+    playability
   );
   const enhanced = enhanceSheetFlow(rawEvents, analysis.tempoEstimate, enhancerMode);
   analysis.feelDensity = density;
+  analysis.playability = playability;
   analysis.enhancerMode = enhancerMode;
   analysis.combinedEvents = enhanced.events;
   analysis.enhancementSummary = enhanced.summary;
@@ -1106,6 +1320,16 @@ function renderChordAnalysis() {
   els.chordCountText.textContent = String(segments.filter((segment) => segment.label !== "N.C.").length);
   els.melodyCountText.textContent = String(melodyNotes.length);
   els.playableCountText.textContent = `${playable.length} chord / ${playableMelody.length} melody`;
+  if (els.matchScoreText) {
+    els.matchScoreText.textContent = analysis.quality ? `${Math.round(analysis.quality.score * 100)}%` : "-";
+  }
+  if (els.recoveredCountText) {
+    const correction = analysis.correctionSummary;
+    const recovered = correction ? correction.melodyAdded + correction.backgroundAdded + correction.rhythmAdded : 0;
+    els.recoveredCountText.textContent = correction
+      ? `${recovered} / ${correction.passes}`
+      : "0";
+  }
   els.importChordsBtn.disabled = playable.length === 0;
   els.importMelodyBtn.disabled = playableMelody.length === 0;
   els.refineChordsBtn.disabled = segments.length === 0;
@@ -1223,6 +1447,7 @@ function renderAll() {
   renderTimeline();
   renderExport();
   renderChordAnalysis();
+  renderScoreAnalysis();
 }
 
 function addNoteEvent(notes) {
@@ -1420,6 +1645,2260 @@ function setAudioStatus(text) {
   els.audioStatus.textContent = text;
 }
 
+function setScoreStatus(text) {
+  if (els.scoreStatus) els.scoreStatus.textContent = text;
+}
+
+function fileExtension(fileName) {
+  const match = String(fileName || "").toLowerCase().match(/\.([a-z0-9]+)$/);
+  return match ? match[1] : "";
+}
+
+function isScoreImageFile(file) {
+  return file && String(file.type || "").startsWith("image/");
+}
+
+function isScorePdfFile(file) {
+  const extension = fileExtension(file && file.name);
+  return file && (file.type === "application/pdf" || extension === "pdf");
+}
+
+function isScoreXmlFile(file) {
+  const extension = fileExtension(file && file.name);
+  return file && (
+    extension === "xml" ||
+    extension === "musicxml" ||
+    /xml/.test(String(file.type || ""))
+  );
+}
+
+function isScoreJsonFile(file) {
+  return file && (fileExtension(file.name) === "json" || String(file.type || "").includes("json"));
+}
+
+function isScoreTextFile(file) {
+  const extension = fileExtension(file && file.name);
+  return file && (extension === "txt" || extension === "text" || String(file.type || "").startsWith("text/"));
+}
+
+function isScoreMxlFile(file) {
+  const extension = fileExtension(file && file.name);
+  return file && (extension === "mxl" || extension === "zip" || String(file.type || "").includes("zip"));
+}
+
+function scoreOmrServerError(browserMessage = "") {
+  const localHint = window.location.protocol === "file:"
+    ? "Run npm run dev, then either open http://127.0.0.1:5173 or keep this file page open while that server is running."
+    : "Make sure npm run dev is running, or use the deployed Vercel URL.";
+  const suffix = browserMessage ? ` Browser error: ${browserMessage}` : "";
+  return `MXL score import needs /api/sheet-omr. ${localHint}${suffix}`;
+}
+
+function scoreOmrEndpoint() {
+  return window.location.protocol === "file:" ? LOCAL_SCORE_OMR_API : "/api/sheet-omr";
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("File read failed"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function dataUrlToPayload(dataUrl, fallbackMediaType = "application/octet-stream") {
+  const match = String(dataUrl || "").match(/^data:([^;,]+);base64,(.+)$/);
+  if (!match) {
+    return {
+      mediaType: fallbackMediaType,
+      data: String(dataUrl || "")
+    };
+  }
+  return {
+    mediaType: match[1] || fallbackMediaType,
+    data: match[2] || ""
+  };
+}
+
+function clampTempo(value, fallback = state.bpm) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) return Math.min(240, Math.max(30, Number(fallback) || 96));
+  return Math.min(240, Math.max(30, Math.round(numeric)));
+}
+
+function parseTimeSignature(value) {
+  if (value && typeof value === "object") {
+    const beats = Number(value.beats || value.numerator || value.top);
+    const beatType = Number(value.beatType || value.denominator || value.bottom);
+    if (beats > 0 && beatType > 0) return { beats, beatType };
+  }
+  const match = String(value || "").match(/(\d+)\s*\/\s*(\d+)/);
+  if (!match) return { beats: 4, beatType: 4 };
+  return {
+    beats: Math.max(1, Number(match[1]) || 4),
+    beatType: Math.max(1, Number(match[2]) || 4)
+  };
+}
+
+function normalizeKeyText(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\b(major|maj|minor|min|key|scale|concert)\b/gi, "")
+    .replace(/♯/g, "#")
+    .replace(/♭/g, "b")
+    .replace(/[^A-Ga-g#b]/g, "");
+}
+
+function keyIdFromAny(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string" && !value.trim()) return null;
+  if (typeof value === "number" || /^-?\d+$/.test(String(value).trim())) return keyIdFromFifths(Number(value));
+  const normalized = normalizeKeyText(value);
+  if (!normalized) return null;
+  return KEY_ALIASES.get(normalized.toLowerCase()) || null;
+}
+
+function keyIdFromFifths(fifths) {
+  const table = {
+    "-7": "B",
+    "-6": "Gb",
+    "-5": "Db",
+    "-4": "Ab",
+    "-3": "Eb",
+    "-2": "Bb",
+    "-1": "F",
+    0: "C",
+    1: "G",
+    2: "D",
+    3: "A",
+    4: "E",
+    5: "B",
+    6: "Gb",
+    7: "Db"
+  };
+  return table[String(Math.max(-7, Math.min(7, Math.round(fifths))))] || null;
+}
+
+function midiFromPitchName(value) {
+  const cleaned = String(value || "").trim().replace(/♯/g, "#").replace(/♭/g, "b");
+  const match = cleaned.match(/^([A-Ga-g])([#b]{0,2})(-?\d+)$/);
+  if (!match) return null;
+  let note = match[1].toUpperCase();
+  const accidental = match[2] || "";
+  if (accidental === "##") note += "#";
+  else if (accidental === "bb") {
+    const pc = normalizePc(noteNameToPc(note) - 2);
+    return (Number(match[3]) + 1) * 12 + pc;
+  } else {
+    note += accidental;
+  }
+  const pc = NOTE_TO_PC[note];
+  if (pc === undefined) return null;
+  return (Number(match[3]) + 1) * 12 + pc;
+}
+
+function pitchNameForMidi(midi, keyId = state.keyId) {
+  const rounded = Math.round(midi);
+  const octave = Math.floor(rounded / 12) - 1;
+  return `${noteNameForPc(rounded, keyId)}${octave}`;
+}
+
+function parseMidiValue(value) {
+  if (Number.isFinite(Number(value))) return Number(value);
+  return midiFromPitchName(value);
+}
+
+function readXmlChildText(parent, tagName) {
+  if (!parent) return "";
+  for (const child of parent.children || []) {
+    if (child.tagName === tagName) return (child.textContent || "").trim();
+  }
+  return "";
+}
+
+function firstXmlChild(parent, tagName) {
+  if (!parent) return null;
+  for (const child of parent.children || []) {
+    if (child.tagName === tagName) return child;
+  }
+  return null;
+}
+
+function directXmlChildren(parent, tagName = null) {
+  if (!parent) return [];
+  return Array.from(parent.children || []).filter((child) => !tagName || child.tagName === tagName);
+}
+
+function parseMusicXmlTempo(direction) {
+  const sound = firstXmlChild(direction, "sound");
+  if (sound && sound.getAttribute("tempo")) return Number(sound.getAttribute("tempo"));
+  const metronome = firstXmlChild(firstXmlChild(direction, "direction-type"), "metronome");
+  if (!metronome) return null;
+  const perMinute = Number(readXmlChildText(metronome, "per-minute"));
+  return Number.isFinite(perMinute) && perMinute > 0 ? perMinute : null;
+}
+
+function parseMusicXmlScore(xmlText, fileName = "") {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xmlText, "application/xml");
+  const parseError = doc.querySelector("parsererror");
+  if (parseError) throw new Error("MusicXML parse failed");
+
+  const title =
+    (doc.querySelector("work-title") && doc.querySelector("work-title").textContent.trim()) ||
+    (doc.querySelector("movement-title") && doc.querySelector("movement-title").textContent.trim()) ||
+    fileName.replace(/\.[^.]+$/, "") ||
+    "Imported score";
+  const notes = [];
+  const warnings = [];
+  let bpm = null;
+  let keyId = null;
+  let timeSignature = { beats: 4, beatType: 4 };
+  const parts = Array.from(doc.querySelectorAll("score-partwise > part, part"));
+
+  parts.forEach((part, partIndex) => {
+    let divisions = 1;
+    let measureStartBeat = 0;
+    let currentTimeSignature = { ...timeSignature };
+    const activeTies = new Map();
+
+    directXmlChildren(part, "measure").forEach((measure) => {
+      let cursorBeat = measureStartBeat;
+      let maxCursorBeat = measureStartBeat;
+      let previousNoteStart = cursorBeat;
+
+      directXmlChildren(measure).forEach((node) => {
+        if (node.tagName === "attributes") {
+          const divisionsText = readXmlChildText(node, "divisions");
+          if (divisionsText) divisions = Math.max(1, Number(divisionsText) || divisions);
+
+          const key = firstXmlChild(node, "key");
+          if (key && !keyId) {
+            const fifthsText = readXmlChildText(key, "fifths");
+            if (fifthsText !== "") keyId = keyIdFromFifths(Number(fifthsText));
+          }
+
+          const time = firstXmlChild(node, "time");
+          if (time) {
+            const beats = Number(readXmlChildText(time, "beats")) || currentTimeSignature.beats;
+            const beatType = Number(readXmlChildText(time, "beat-type")) || currentTimeSignature.beatType;
+            currentTimeSignature = { beats, beatType };
+            timeSignature = { beats, beatType };
+          }
+          return;
+        }
+
+        if (node.tagName === "direction") {
+          const tempo = parseMusicXmlTempo(node);
+          if (tempo) bpm = tempo;
+          return;
+        }
+
+        if (node.tagName === "backup" || node.tagName === "forward") {
+          const duration = (Number(readXmlChildText(node, "duration")) || 0) / Math.max(1, divisions);
+          cursorBeat += node.tagName === "backup" ? -duration : duration;
+          cursorBeat = Math.max(measureStartBeat, cursorBeat);
+          maxCursorBeat = Math.max(maxCursorBeat, cursorBeat);
+          return;
+        }
+
+        if (node.tagName !== "note") return;
+
+        const duration = (Number(readXmlChildText(node, "duration")) || 0) / Math.max(1, divisions);
+        const isChord = Boolean(firstXmlChild(node, "chord"));
+        const startBeat = isChord ? previousNoteStart : cursorBeat;
+        const endBeat = startBeat + Math.max(0.0625, duration || 0.25);
+        const rest = firstXmlChild(node, "rest");
+        const pitch = firstXmlChild(node, "pitch");
+
+        if (!rest && pitch) {
+          const step = readXmlChildText(pitch, "step").toUpperCase();
+          const alter = Number(readXmlChildText(pitch, "alter") || 0);
+          const octave = Number(readXmlChildText(pitch, "octave"));
+          const pc = normalizePc(noteNameToPc(step) + alter);
+          const midi = (octave + 1) * 12 + pc;
+          const staff = readXmlChildText(node, "staff") || (partIndex === 0 ? "right" : "left");
+          const voice = readXmlChildText(node, "voice") || "1";
+          const tieStart = directXmlChildren(node, "tie").some((tie) => tie.getAttribute("type") === "start");
+          const tieStop = directXmlChildren(node, "tie").some((tie) => tie.getAttribute("type") === "stop");
+          const tieKey = `${partIndex}:${staff}:${voice}:${midi}`;
+
+          if (tieStop && activeTies.has(tieKey)) {
+            const tied = activeTies.get(tieKey);
+            tied.endBeat = Math.max(tied.endBeat, endBeat);
+            tied.durationBeats = tied.endBeat - tied.startBeat;
+            if (!tieStart) activeTies.delete(tieKey);
+          } else {
+            const note = {
+              startBeat,
+              endBeat,
+              durationBeats: endBeat - startBeat,
+              midi,
+              pitch: pitchNameForMidi(midi, keyId || state.keyId),
+              staff,
+              voice,
+              part: part.getAttribute("id") || String(partIndex + 1),
+              confidence: 1,
+              source: "musicxml"
+            };
+            notes.push(note);
+            if (tieStart) activeTies.set(tieKey, note);
+          }
+        }
+
+        if (!isChord) {
+          previousNoteStart = startBeat;
+          cursorBeat += Math.max(0, duration);
+          maxCursorBeat = Math.max(maxCursorBeat, cursorBeat);
+        }
+      });
+
+      const nominalMeasureBeats = currentTimeSignature.beats * (4 / Math.max(1, currentTimeSignature.beatType));
+      measureStartBeat += Math.max(nominalMeasureBeats, maxCursorBeat - measureStartBeat, 0.25);
+    });
+  });
+
+  if (!notes.length) warnings.push("No pitched MusicXML notes found.");
+  return normalizeScoreData({
+    title,
+    bpm,
+    key: keyId,
+    timeSignature,
+    notes,
+    warnings,
+    sourceType: "musicxml"
+  });
+}
+
+function normalizeScoreNote(raw, fallbackIndex = 0) {
+  const rawStart = raw.startBeat ?? raw.start ?? raw.beat ?? raw.time ?? fallbackIndex;
+  const rawDuration = raw.durationBeats ?? raw.duration ?? raw.beats ?? raw.length ?? 1;
+  const midi = parseMidiValue(raw.midi ?? raw.pitch ?? raw.note ?? raw.name);
+  if (!Number.isFinite(midi)) return null;
+  const startBeat = Math.max(0, Number(rawStart) || 0);
+  const durationBeats = Math.max(0.0625, Number(rawDuration) || 1);
+  return {
+    startBeat,
+    endBeat: startBeat + durationBeats,
+    durationBeats,
+    midi,
+    pitch: raw.pitch || raw.note || pitchNameForMidi(midi),
+    staff: raw.staff || raw.hand || raw.track || "",
+    voice: raw.voice || "1",
+    part: raw.part || "",
+    role: raw.role || "",
+    visualKind: raw.visualKind || raw.visual_kind || "",
+    confidence: Math.max(0, Math.min(1, Number(raw.confidence) || 1)),
+    source: raw.source || "score"
+  };
+}
+
+function normalizeScoreData(input) {
+  const data = input && typeof input === "object" ? input : {};
+  const warnings = Array.isArray(data.warnings) ? data.warnings.map(String) : [];
+  const timeSignature = parseTimeSignature(data.timeSignature || data.time_signature || data.meter);
+  const explicitKey = keyIdFromAny(data.key || data.keySignature || data.key_signature || data.tonic);
+  const title = String(data.title || data.name || "Imported score");
+  const notes = [];
+
+  if (Array.isArray(data.notes)) {
+    data.notes.forEach((raw, index) => {
+      const note = normalizeScoreNote(raw, index);
+      if (note) notes.push(note);
+    });
+  }
+
+  if (Array.isArray(data.events)) {
+    data.events.forEach((event, index) => {
+      const startBeat = Math.max(0, Number(event.startBeat ?? event.start ?? event.beat ?? event.time ?? index) || 0);
+      const durationBeats = Math.max(0.0625, Number(event.durationBeats ?? event.duration ?? event.beats ?? 1) || 1);
+      const pitches = event.pitches || event.notes || event.midi || event.midis || [];
+      const pitchList = Array.isArray(pitches) ? pitches : [pitches];
+      pitchList.forEach((pitch) => {
+        const midi = parseMidiValue(pitch);
+        if (!Number.isFinite(midi)) return;
+        notes.push({
+          startBeat,
+          endBeat: startBeat + durationBeats,
+          durationBeats,
+          midi,
+          pitch: typeof pitch === "string" ? pitch : pitchNameForMidi(midi),
+          staff: event.staff || event.hand || event.track || "",
+          voice: event.voice || "1",
+          part: event.part || "",
+          role: event.role || "",
+          visualKind: event.visualKind || event.visual_kind || "",
+          confidence: Math.max(0, Math.min(1, Number(event.confidence) || 1)),
+          source: event.source || "score"
+        });
+      });
+    });
+  }
+
+  const sortedNotes = notes
+    .filter((note) => Number.isFinite(note.midi) && Number.isFinite(note.startBeat))
+    .sort((a, b) => a.startBeat - b.startBeat || b.midi - a.midi);
+  const events = groupScoreNotes(sortedNotes);
+  const durationBeats = sortedNotes.reduce((max, note) => Math.max(max, note.endBeat), 0);
+
+  if (!sortedNotes.length && !warnings.length) warnings.push("No pitched notes found.");
+  const normalized = {
+    title,
+    bpm: clampTempo(data.bpm || data.tempo, state.bpm),
+    keyId: explicitKey,
+    keyLabel: explicitKey ? keyConfigById(explicitKey).label : "",
+    timeSignature,
+    notes: sortedNotes,
+    events,
+    warnings,
+    sourceType: data.sourceType || data.source_type || "score",
+    confidence: Number.isFinite(Number(data.confidence)) ? Math.max(0, Math.min(1, Number(data.confidence))) : null,
+    durationBeats
+  };
+  normalized.classification = {
+    ...classifyScoreDataStructure(normalized),
+    ...(data.classification && typeof data.classification === "object" ? data.classification : {})
+  };
+  return normalized;
+}
+
+function groupScoreNotes(notes) {
+  const groups = [];
+  notes.forEach((note) => {
+    const last = groups[groups.length - 1];
+    if (last && Math.abs(last.startBeat - note.startBeat) <= 0.015) {
+      last.notes.push(note);
+      last.endBeat = Math.max(last.endBeat, note.endBeat);
+      last.durationBeats = Math.max(last.durationBeats, note.durationBeats);
+      return;
+    }
+    groups.push({
+      startBeat: note.startBeat,
+      endBeat: note.endBeat,
+      durationBeats: note.durationBeats,
+      notes: [note]
+    });
+  });
+
+  return groups.map((group) => ({
+    ...group,
+    midis: group.notes.map((note) => note.midi),
+    pitches: group.notes.map((note) => pitchNameForMidi(note.midi)),
+    staff: group.notes.some((note) => /left|bass|2/i.test(note.staff)) ? "mixed" : group.notes[0]?.staff || "",
+    simultaneous: group.notes.length >= 2,
+    dense: group.notes.length >= 3,
+    crossStaff: new Set(group.notes.map((note) => note.staff || "")).size > 1,
+    confidence: group.notes.reduce((sum, note) => sum + note.confidence, 0) / Math.max(1, group.notes.length)
+  }));
+}
+
+function classifyScoreDataStructure(scoreData) {
+  const events = Array.isArray(scoreData.events) ? scoreData.events : [];
+  const notes = Array.isArray(scoreData.notes) ? scoreData.notes : [];
+  const durationBeats = Math.max(1, Number(scoreData.durationBeats) || 1);
+  const beatsPerMeasure = scoreData.timeSignature && scoreData.timeSignature.beats
+    ? scoreData.timeSignature.beats * (4 / Math.max(1, scoreData.timeSignature.beatType || 4))
+    : VISION_SCORE_DEFAULT_BEATS_PER_BAR;
+  const measureCount = Math.max(1, Math.ceil(durationBeats / Math.max(1, beatsPerMeasure)));
+  const simultaneousGroups = events.filter((group) => group.notes && group.notes.length >= 2);
+  const denseGroups = events.filter((group) => group.notes && group.notes.length >= 3);
+  const crossStaffGroups = events.filter((group) => {
+    const roles = new Set((group.notes || []).map((note) => note.staff || ""));
+    return roles.size > 1;
+  });
+  const trebleNotes = notes.filter((note) => /right|treble|melody|1/i.test(note.staff || ""));
+  const bassNotes = notes.filter((note) => /left|bass|2/i.test(note.staff || ""));
+  const notesPerMeasure = notes.length / measureCount;
+  const simultaneousRatio = simultaneousGroups.length / Math.max(1, events.length);
+  const bassRatio = bassNotes.length / Math.max(1, notes.length);
+  const trebleRatio = trebleNotes.length / Math.max(1, notes.length);
+  const densityScore = notesPerMeasure + simultaneousRatio * 8 + denseGroups.length / measureCount * 2.2;
+
+  let complexity = "simple";
+  if (densityScore >= 24 || denseGroups.length / measureCount >= 2.4) complexity = "dense";
+  else if (densityScore >= 14 || simultaneousRatio >= 0.42) complexity = "complex";
+  else if (densityScore >= 7 || simultaneousRatio >= 0.18) complexity = "moderate";
+
+  let texture = "single-line";
+  if (bassRatio > 0.22 && trebleRatio > 0.22 && simultaneousRatio > 0.36) texture = "piano chordal";
+  else if (bassRatio > 0.18 && trebleRatio > 0.3) texture = "melody + accompaniment";
+  else if (simultaneousRatio > 0.42) texture = "stacked chords";
+  else if (notes.length > 0) texture = "melody-led";
+
+  return {
+    texture,
+    complexity,
+    measureCount,
+    notesPerMeasure,
+    simultaneousCount: simultaneousGroups.length,
+    denseChordCount: denseGroups.length,
+    crossStaffCount: crossStaffGroups.length,
+    simultaneousRatio,
+    bassRatio,
+    trebleRatio
+  };
+}
+
+function parseScoreText(text, fileName = "") {
+  const tokens = String(text || "").match(/\[[^\]]+\]|[A-Ga-g][#b♯♭]?-?\d(?::[0-9.]+)?|[|]/g) || [];
+  const notes = [];
+  let beat = 0;
+  tokens.forEach((token) => {
+    if (token === "|") return;
+    const isChord = token.startsWith("[") && token.endsWith("]");
+    const content = isChord ? token.slice(1, -1) : token;
+    const parts = content.trim().split(/[\s,+/]+/).filter(Boolean);
+    let durationBeats = 1;
+    parts.forEach((part) => {
+      const [pitch, duration] = part.split(":");
+      if (duration) durationBeats = Math.max(0.0625, Number(duration) || durationBeats);
+      const midi = midiFromPitchName(pitch);
+      if (!Number.isFinite(midi)) return;
+      notes.push({
+        startBeat: beat,
+        endBeat: beat + durationBeats,
+        durationBeats,
+        midi,
+        pitch,
+        staff: "",
+        voice: "1",
+        part: "text",
+        confidence: 0.86,
+        source: "text"
+      });
+    });
+    beat += durationBeats;
+  });
+
+  return normalizeScoreData({
+    title: fileName.replace(/\.[^.]+$/, "") || "Text score",
+    notes,
+    warnings: tokens.length ? [] : ["No note-name tokens found in text score."],
+    sourceType: "text"
+  });
+}
+
+function createCanvasFromBitmap(bitmap, maxWidth = VISION_SCORE_MAX_WIDTH, maxHeight = VISION_SCORE_MAX_HEIGHT) {
+  const scale = Math.min(
+    VISION_SCORE_MAX_SCALE,
+    maxWidth / Math.max(1, bitmap.width),
+    maxHeight / Math.max(1, bitmap.height)
+  );
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+  const context = canvas.getContext("2d");
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+
+async function imageFileToVisionCanvas(file) {
+  const bitmap = await createImageBitmap(file);
+  const canvas = createCanvasFromBitmap(bitmap);
+  if (bitmap.close) bitmap.close();
+  return canvas;
+}
+
+function otsuThresholdFromImageData(imageData) {
+  const histogram = new Array(256).fill(0);
+  const data = imageData.data;
+  for (let index = 0; index < data.length; index += 4) {
+    const value = Math.round(data[index] * 0.299 + data[index + 1] * 0.587 + data[index + 2] * 0.114);
+    histogram[value] += 1;
+  }
+
+  const total = imageData.width * imageData.height;
+  let sum = 0;
+  for (let value = 0; value < 256; value += 1) sum += value * histogram[value];
+
+  let sumBackground = 0;
+  let weightBackground = 0;
+  let bestVariance = 0;
+  let threshold = 150;
+  for (let value = 0; value < 256; value += 1) {
+    weightBackground += histogram[value];
+    if (!weightBackground) continue;
+    const weightForeground = total - weightBackground;
+    if (!weightForeground) break;
+    sumBackground += value * histogram[value];
+    const meanBackground = sumBackground / weightBackground;
+    const meanForeground = (sum - sumBackground) / weightForeground;
+    const variance = weightBackground * weightForeground * (meanBackground - meanForeground) ** 2;
+    if (variance > bestVariance) {
+      bestVariance = variance;
+      threshold = value;
+    }
+  }
+  return Math.max(90, Math.min(210, threshold + 12));
+}
+
+function buildVisionBinary(canvas) {
+  const context = canvas.getContext("2d");
+  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+  const threshold = otsuThresholdFromImageData(imageData);
+  const dark = new Uint8Array(canvas.width * canvas.height);
+  const data = imageData.data;
+
+  for (let pixel = 0, index = 0; index < data.length; index += 4, pixel += 1) {
+    const value = data[index] * 0.299 + data[index + 1] * 0.587 + data[index + 2] * 0.114;
+    dark[pixel] = value < threshold ? 1 : 0;
+  }
+
+  return {
+    width: canvas.width,
+    height: canvas.height,
+    dark,
+    threshold
+  };
+}
+
+function groupProjectionRuns(values, threshold, minLength = 1) {
+  const runs = [];
+  let start = -1;
+  let score = 0;
+  let weighted = 0;
+
+  values.forEach((value, index) => {
+    if (value >= threshold) {
+      if (start < 0) {
+        start = index;
+        score = 0;
+        weighted = 0;
+      }
+      score += value;
+      weighted += value * index;
+      return;
+    }
+
+    if (start >= 0 && index - start >= minLength) {
+      runs.push({
+        start,
+        end: index - 1,
+        center: score ? weighted / score : (start + index - 1) / 2,
+        score
+      });
+    }
+    start = -1;
+  });
+
+  if (start >= 0 && values.length - start >= minLength) {
+    runs.push({
+      start,
+      end: values.length - 1,
+      center: score ? weighted / score : (start + values.length - 1) / 2,
+      score
+    });
+  }
+  return runs;
+}
+
+function smoothProjection(values, radius = 1) {
+  return values.map((value, index) => {
+    let sum = 0;
+    let count = 0;
+    for (let offset = -radius; offset <= radius; offset += 1) {
+      const neighbor = values[index + offset];
+      if (neighbor === undefined) continue;
+      sum += neighbor;
+      count += 1;
+    }
+    return count ? sum / count : value;
+  });
+}
+
+function darkAt(binary, x, y) {
+  const ix = Math.round(x);
+  const iy = Math.round(y);
+  if (ix < 0 || iy < 0 || ix >= binary.width || iy >= binary.height) return 0;
+  return binary.dark[iy * binary.width + ix];
+}
+
+function detectVisionStaffXRange(binary, lineCenters) {
+  const columnScores = new Array(binary.width).fill(0);
+  for (let x = 0; x < binary.width; x += 1) {
+    let score = 0;
+    lineCenters.forEach((lineY) => {
+      for (let dy = -1; dy <= 1; dy += 1) {
+        score += darkAt(binary, x, lineY + dy);
+      }
+    });
+    columnScores[x] = score;
+  }
+
+  const threshold = Math.max(2, Math.min(lineCenters.length, 4));
+  const runs = groupProjectionRuns(smoothProjection(columnScores, 2), threshold, Math.floor(binary.width * 0.18));
+  if (!runs.length) {
+    return {
+      left: 0,
+      right: binary.width - 1
+    };
+  }
+
+  const longest = runs.sort((a, b) => (b.end - b.start) - (a.end - a.start))[0];
+  return {
+    left: Math.max(0, Math.floor(longest.start)),
+    right: Math.min(binary.width - 1, Math.ceil(longest.end))
+  };
+}
+
+function detectVisionStaves(binary) {
+  const projection = new Array(binary.height).fill(0);
+  for (let y = 0; y < binary.height; y += 1) {
+    let count = 0;
+    for (let x = 0; x < binary.width; x += 1) {
+      count += binary.dark[y * binary.width + x];
+    }
+    projection[y] = count;
+  }
+
+  const smoothed = smoothProjection(projection, 1);
+  const high = Math.max(...smoothed, 1);
+  const threshold = Math.max(binary.width * 0.18, high * 0.42);
+  const lineRuns = groupProjectionRuns(smoothed, threshold, 1);
+  const centers = lineRuns.map((run) => run.center).sort((a, b) => a - b);
+  const staves = [];
+
+  for (let index = 0; index <= centers.length - 5;) {
+    const lines = centers.slice(index, index + 5);
+    const gaps = [];
+    for (let gapIndex = 1; gapIndex < lines.length; gapIndex += 1) {
+      gaps.push(lines[gapIndex] - lines[gapIndex - 1]);
+    }
+    const spacing = median(gaps);
+    const valid = spacing >= 3 &&
+      spacing <= Math.max(36, binary.height * 0.055) &&
+      gaps.every((gap) => Math.abs(gap - spacing) <= Math.max(2.5, spacing * 0.32));
+
+    if (!valid) {
+      index += 1;
+      continue;
+    }
+
+    const range = detectVisionStaffXRange(binary, lines);
+    staves.push({
+      index: staves.length,
+      lines,
+      spacing,
+      top: lines[0],
+      bottom: lines[4],
+      left: range.left,
+      right: range.right,
+      role: ""
+    });
+    index += 5;
+  }
+
+  return staves;
+}
+
+function pairVisionGrandStaves(staves) {
+  const systems = [];
+  const sorted = [...staves].sort((a, b) => a.top - b.top);
+  let index = 0;
+
+  while (index < sorted.length) {
+    const first = sorted[index];
+    const second = sorted[index + 1];
+    const spacing = first.spacing || (second && second.spacing) || 8;
+    const gap = second ? second.top - first.bottom : Infinity;
+    const pair = second && gap > spacing * 1.4 && gap < spacing * 9.5;
+    const members = pair ? [first, second] : [first];
+    members[0].role = "treble";
+    if (members[1]) members[1].role = "bass";
+
+    systems.push({
+      index: systems.length,
+      staves: members,
+      top: Math.min(...members.map((staff) => staff.top)),
+      bottom: Math.max(...members.map((staff) => staff.bottom)),
+      left: Math.min(...members.map((staff) => staff.left)),
+      right: Math.max(...members.map((staff) => staff.right)),
+      spacing: median(members.map((staff) => staff.spacing)),
+      startBeat: 0,
+      beatsPerMeasure: VISION_SCORE_DEFAULT_BEATS_PER_BAR
+    });
+    index += pair ? 2 : 1;
+  }
+
+  return systems;
+}
+
+function isVisionStaffLinePixel(x, y, staff) {
+  if (x < staff.left - staff.spacing || x > staff.right + staff.spacing) return false;
+  return staff.lines.some((lineY) => Math.abs(y - lineY) <= Math.max(1, staff.spacing * 0.12));
+}
+
+function visionDiatonicMidi(baseLetter, baseOctave, stepDelta, keyFifths) {
+  const letters = ["C", "D", "E", "F", "G", "A", "B"];
+  const naturalPcs = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+  const baseIndex = letters.indexOf(baseLetter);
+  const absolute = baseIndex + stepDelta;
+  const letterIndex = ((absolute % 7) + 7) % 7;
+  const octave = baseOctave + Math.floor(absolute / 7);
+  const letter = letters[letterIndex];
+  const sharpOrder = ["F", "C", "G", "D", "A", "E", "B"];
+  const flatOrder = ["B", "E", "A", "D", "G", "C", "F"];
+  let accidental = 0;
+  if (keyFifths > 0 && sharpOrder.slice(0, keyFifths).includes(letter)) accidental = 1;
+  if (keyFifths < 0 && flatOrder.slice(0, Math.abs(keyFifths)).includes(letter)) accidental = -1;
+  return (octave + 1) * 12 + naturalPcs[letter] + accidental;
+}
+
+function midiForVisionStaffPosition(staff, y, keyFifths) {
+  const halfSpacing = Math.max(1, staff.spacing / 2);
+  const stepDelta = Math.round((staff.lines[4] - y) / halfSpacing);
+  if (staff.role === "bass") return visionDiatonicMidi("G", 2, stepDelta, keyFifths);
+  return visionDiatonicMidi("E", 4, stepDelta, keyFifths);
+}
+
+function detectVisionKeyFifths(binary, systems) {
+  const flatCounts = [];
+  systems.forEach((system) => {
+    system.staves.forEach((staff) => {
+      const spacing = staff.spacing;
+      const xStart = Math.max(0, Math.floor(staff.left + spacing * 3.4));
+      const xEnd = Math.min(binary.width - 1, Math.floor(staff.left + spacing * 11.5));
+      const yStart = Math.max(0, Math.floor(staff.top - spacing * 2.2));
+      const yEnd = Math.min(binary.height - 1, Math.ceil(staff.bottom + spacing * 2.2));
+      const visited = new Uint8Array(binary.width * binary.height);
+      const components = [];
+
+      for (let y = yStart; y <= yEnd; y += 1) {
+        for (let x = xStart; x <= xEnd; x += 1) {
+          const offset = y * binary.width + x;
+          if (visited[offset] || !binary.dark[offset] || isVisionStaffLinePixel(x, y, staff)) continue;
+          const stack = [[x, y]];
+          visited[offset] = 1;
+          let minX = x;
+          let maxX = x;
+          let minY = y;
+          let maxY = y;
+          let area = 0;
+
+          while (stack.length) {
+            const [cx, cy] = stack.pop();
+            area += 1;
+            minX = Math.min(minX, cx);
+            maxX = Math.max(maxX, cx);
+            minY = Math.min(minY, cy);
+            maxY = Math.max(maxY, cy);
+            for (let dy = -1; dy <= 1; dy += 1) {
+              for (let dx = -1; dx <= 1; dx += 1) {
+                if (!dx && !dy) continue;
+                const nx = cx + dx;
+                const ny = cy + dy;
+                if (nx < xStart || nx > xEnd || ny < yStart || ny > yEnd) continue;
+                const nextOffset = ny * binary.width + nx;
+                if (visited[nextOffset] || !binary.dark[nextOffset] || isVisionStaffLinePixel(nx, ny, staff)) continue;
+                visited[nextOffset] = 1;
+                stack.push([nx, ny]);
+              }
+            }
+          }
+
+          const width = maxX - minX + 1;
+          const height = maxY - minY + 1;
+          if (
+            area >= Math.max(5, spacing * spacing * 0.08) &&
+            width <= spacing * 1.9 &&
+            height >= spacing * 0.85 &&
+            height <= spacing * 3.2
+          ) {
+            components.push({ x: (minX + maxX) / 2, width, height, area });
+          }
+        }
+      }
+
+      const uniqueXs = [];
+      components
+        .sort((a, b) => a.x - b.x)
+        .forEach((component) => {
+          if (!uniqueXs.some((x) => Math.abs(x - component.x) < spacing * 0.75)) uniqueXs.push(component.x);
+        });
+      if (uniqueXs.length >= 1 && uniqueXs.length <= 7) flatCounts.push(uniqueXs.length);
+    });
+  });
+
+  if (!flatCounts.length) {
+    return {
+      fifths: 0,
+      confidence: 0.2,
+      label: "no visible key signature"
+    };
+  }
+
+  const count = Math.max(0, Math.min(7, Math.round(median(flatCounts))));
+  return {
+    fifths: -count,
+    confidence: Math.min(1, 0.35 + flatCounts.length * 0.12),
+    label: count ? `${count} flat${count === 1 ? "" : "s"}` : "C"
+  };
+}
+
+function scoreVisionEllipse(binary, staff, x0, y0, rx, ry) {
+  let score = 0;
+  let centerScore = 0;
+  const minX = Math.max(0, Math.floor(x0 - rx));
+  const maxX = Math.min(binary.width - 1, Math.ceil(x0 + rx));
+  const minY = Math.max(0, Math.floor(y0 - ry));
+  const maxY = Math.min(binary.height - 1, Math.ceil(y0 + ry));
+
+  for (let y = minY; y <= maxY; y += 1) {
+    for (let x = minX; x <= maxX; x += 1) {
+      const nx = (x - x0) / Math.max(1, rx);
+      const ny = (y - y0) / Math.max(1, ry);
+      if (nx * nx + ny * ny > 1) continue;
+      if (!darkAt(binary, x, y) || isVisionStaffLinePixel(x, y, staff)) continue;
+      score += 1;
+      if (Math.abs(nx) <= 0.55 && Math.abs(ny) <= 0.55) centerScore += 1;
+    }
+  }
+
+  return score + centerScore * 0.7;
+}
+
+function longestVisionVerticalRun(binary, x, yStart, yEnd) {
+  const ix = Math.round(x);
+  let longest = 0;
+  let current = 0;
+  for (let y = Math.max(0, Math.floor(yStart)); y <= Math.min(binary.height - 1, Math.ceil(yEnd)); y += 1) {
+    if (darkAt(binary, ix, y)) {
+      current += 1;
+      longest = Math.max(longest, current);
+    } else {
+      current = 0;
+    }
+  }
+  return longest;
+}
+
+function detectVisionStemSupport(binary, staff, x0, y0, rx) {
+  const spacing = staff.spacing;
+  const yStart = y0 - spacing * 4.8;
+  const yEnd = y0 + spacing * 4.8;
+  const sideXs = [
+    x0 - rx * 1.15,
+    x0 - rx * 0.9,
+    x0 + rx * 0.9,
+    x0 + rx * 1.15
+  ];
+  let best = { score: 0, x: x0, side: "none" };
+
+  sideXs.forEach((x) => {
+    const score = longestVisionVerticalRun(binary, x, yStart, yEnd);
+    if (score > best.score) {
+      best = {
+        score,
+        x,
+        side: x < x0 ? "left" : "right"
+      };
+    }
+  });
+
+  return {
+    ...best,
+    hasStem: best.score >= spacing * 1.45
+  };
+}
+
+function detectVisionBeamSupport(binary, staff, x0, y0, stem) {
+  if (!stem || !stem.hasStem) return { score: 0, hasBeam: false };
+  const spacing = staff.spacing;
+  const xStart = Math.max(0, Math.floor(stem.x - spacing * 2.8));
+  const xEnd = Math.min(binary.width - 1, Math.ceil(stem.x + spacing * 2.8));
+  const yStart = Math.max(0, Math.floor(y0 - spacing * 4.8));
+  const yEnd = Math.min(binary.height - 1, Math.ceil(y0 + spacing * 4.8));
+  let bestRun = 0;
+
+  for (let y = yStart; y <= yEnd; y += 1) {
+    if (Math.abs(y - y0) < spacing * 0.85) continue;
+    if (staff.lines.some((lineY) => Math.abs(y - lineY) <= Math.max(1, spacing * 0.12))) continue;
+    let current = 0;
+    for (let x = xStart; x <= xEnd; x += 1) {
+      if (darkAt(binary, x, y)) {
+        current += 1;
+        bestRun = Math.max(bestRun, current);
+      } else {
+        current = 0;
+      }
+    }
+  }
+
+  return {
+    score: bestRun,
+    hasBeam: bestRun >= spacing * 1.45
+  };
+}
+
+function scoreVisionNotehead(binary, staff, x0, y0, rx, ry) {
+  let darkPixels = 0;
+  let ellipsePixels = 0;
+  let centerDark = 0;
+  let centerPixels = 0;
+  let ringDark = 0;
+  let ringPixels = 0;
+  const minX = Math.max(0, Math.floor(x0 - rx * 1.08));
+  const maxX = Math.min(binary.width - 1, Math.ceil(x0 + rx * 1.08));
+  const minY = Math.max(0, Math.floor(y0 - ry * 1.08));
+  const maxY = Math.min(binary.height - 1, Math.ceil(y0 + ry * 1.08));
+
+  for (let y = minY; y <= maxY; y += 1) {
+    for (let x = minX; x <= maxX; x += 1) {
+      const nx = (x - x0) / Math.max(1, rx);
+      const ny = (y - y0) / Math.max(1, ry);
+      const radius = nx * nx + ny * ny;
+      if (radius > 1.08) continue;
+      ellipsePixels += 1;
+      const isCenter = Math.abs(nx) <= 0.5 && Math.abs(ny) <= 0.5;
+      const isRing = radius >= 0.36 && radius <= 1.08;
+      if (isCenter) centerPixels += 1;
+      if (isRing) ringPixels += 1;
+      if (!darkAt(binary, x, y) || isVisionStaffLinePixel(x, y, staff)) continue;
+      darkPixels += 1;
+      if (isCenter) centerDark += 1;
+      if (isRing) ringDark += 1;
+    }
+  }
+
+  const fillRatio = darkPixels / Math.max(1, ellipsePixels);
+  const centerRatio = centerDark / Math.max(1, centerPixels);
+  const ringRatio = ringDark / Math.max(1, ringPixels);
+  const baseFilledScore = darkPixels + centerDark * 0.72;
+  const baseHollowScore = ringDark * 1.35 - centerDark * 0.12;
+  const baseScore = Math.max(baseFilledScore, baseHollowScore);
+  if (baseScore < staff.spacing * staff.spacing * 0.035) {
+    return {
+      score: baseScore,
+      fillRatio,
+      centerRatio,
+      ringRatio,
+      stemScore: 0,
+      beamScore: 0,
+      hasStem: false,
+      hasBeam: false,
+      visualKind: "noise",
+      valueBeats: 1
+    };
+  }
+
+  const stem = detectVisionStemSupport(binary, staff, x0, y0, rx);
+  const beam = detectVisionBeamSupport(binary, staff, x0, y0, stem);
+  const filledScore = darkPixels + centerDark * 0.72 + Math.min(stem.score, staff.spacing * 3.2) * 0.42 + Math.min(beam.score, staff.spacing * 2.8) * 0.28;
+  const hollowScore = ringDark * 1.35 + Math.min(stem.score, staff.spacing * 3.2) * 0.28 - centerDark * 0.12;
+  const hollow = hollowScore > filledScore * 0.9 && ringRatio > 0.18 && centerRatio < 0.34;
+  const outsideStaff = y0 < staff.top - staff.spacing * 2.4 || y0 > staff.bottom + staff.spacing * 2.4;
+  const score = Math.max(filledScore, hollowScore);
+
+  return {
+    score: outsideStaff && !stem.hasStem ? score * 0.76 : score,
+    fillRatio,
+    centerRatio,
+    ringRatio,
+    stemScore: stem.score,
+    beamScore: beam.score,
+    hasStem: stem.hasStem,
+    hasBeam: beam.hasBeam,
+    visualKind: hollow ? (stem.hasStem ? "hollow-stem" : "hollow") : (beam.hasBeam ? "filled-beamed" : "filled"),
+    valueBeats: hollow ? (stem.hasStem ? 2 : 4) : (beam.hasBeam ? 0.5 : 1)
+  };
+}
+
+function detectVisionBarlines(binary, system) {
+  const yStart = Math.max(0, Math.floor(system.top - system.spacing));
+  const yEnd = Math.min(binary.height - 1, Math.ceil(system.bottom + system.spacing));
+  const values = new Array(binary.width).fill(0);
+
+  for (let x = Math.max(0, Math.floor(system.left)); x <= Math.min(binary.width - 1, Math.ceil(system.right)); x += 1) {
+    let count = 0;
+    for (let y = yStart; y <= yEnd; y += 1) count += darkAt(binary, x, y);
+    values[x] = count;
+  }
+
+  const rangeHeight = yEnd - yStart + 1;
+  const threshold = Math.max(system.spacing * 6, rangeHeight * 0.32);
+  return groupProjectionRuns(smoothProjection(values, 1), threshold, 1)
+    .filter((run) => run.end - run.start <= system.spacing * 0.9)
+    .map((run) => run.center)
+    .filter((x) => x >= system.left && x <= system.right)
+    .sort((a, b) => a - b);
+}
+
+function detectVisionNoteCandidates(binary, systems, keyFifths) {
+  const candidates = [];
+
+  systems.forEach((system) => {
+    system.staves.forEach((staff) => {
+      const spacing = staff.spacing;
+      const rx = Math.max(3, spacing * 0.68);
+      const ry = Math.max(3, spacing * 0.58);
+      const threshold = Math.max(5, spacing * spacing * 0.095);
+      const noteStart = Math.min(staff.right, staff.left + spacing * 8.4);
+      const xStart = Math.max(0, Math.floor(noteStart));
+      const xEnd = Math.min(binary.width - 1, Math.ceil(staff.right - spacing * 0.8));
+      const stepMin = -8;
+      const stepMax = 15;
+
+      for (let stepDelta = stepMin; stepDelta <= stepMax; stepDelta += 1) {
+        const y = staff.lines[4] - stepDelta * (spacing / 2);
+        if (y < staff.top - spacing * 4.6 || y > staff.bottom + spacing * 4.6) continue;
+        const scores = new Array(xEnd - xStart + 1).fill(0);
+        const scoreDetails = new Array(xEnd - xStart + 1).fill(null);
+        for (let x = xStart; x <= xEnd; x += 1) {
+          const detail = scoreVisionNotehead(binary, staff, x, y, rx, ry);
+          scores[x - xStart] = detail.score;
+          scoreDetails[x - xStart] = detail;
+        }
+        const runs = groupProjectionRuns(scores, threshold, Math.max(1, Math.floor(spacing * 0.18)));
+        runs.forEach((run) => {
+          const width = run.end - run.start + 1;
+          if (width < spacing * 0.22 || width > spacing * 2.35) return;
+
+          let bestLocal = run.start;
+          let bestScore = 0;
+          for (let local = run.start; local <= run.end; local += 1) {
+            if (scores[local] > bestScore) {
+              bestScore = scores[local];
+              bestLocal = local;
+            }
+          }
+          if (bestScore < threshold * 1.08) return;
+
+          const x = xStart + bestLocal;
+          const detail = scoreDetails[bestLocal] || {};
+          const outsideStaff = y < staff.top - spacing * 2.4 || y > staff.bottom + spacing * 2.4;
+          if (outsideStaff && !detail.hasStem && detail.fillRatio < 0.22) return;
+          candidates.push({
+            systemIndex: system.index,
+            staffIndex: staff.index,
+            staffRole: staff.role || "treble",
+            x,
+            y,
+            midi: midiForVisionStaffPosition(staff, y, keyFifths),
+            confidence: Math.max(0.2, Math.min(1, bestScore / Math.max(1, spacing * spacing * 0.52))),
+            score: bestScore,
+            visualKind: detail.visualKind || "filled",
+            valueBeats: detail.valueBeats || 1,
+            stemScore: detail.stemScore || 0,
+            beamScore: detail.beamScore || 0,
+            hasStem: Boolean(detail.hasStem),
+            hasBeam: Boolean(detail.hasBeam),
+            fillRatio: detail.fillRatio || 0,
+            source: "vision"
+          });
+        });
+      }
+    });
+  });
+
+  const kept = [];
+  candidates
+    .sort((a, b) => b.score - a.score)
+    .forEach((candidate) => {
+      const system = systems[candidate.systemIndex];
+      const spacing = system ? system.spacing : 8;
+      const duplicate = kept.some((item) => {
+        return item.systemIndex === candidate.systemIndex &&
+          item.staffIndex === candidate.staffIndex &&
+          Math.abs(item.x - candidate.x) <= spacing * 0.55 &&
+          Math.abs(item.y - candidate.y) <= spacing * 0.62;
+      });
+      if (!duplicate) kept.push(candidate);
+    });
+
+  return kept.sort((a, b) => a.systemIndex - b.systemIndex || a.x - b.x || b.midi - a.midi);
+}
+
+function groupVisionCandidatesByX(candidates, spacing) {
+  const groups = [];
+  candidates
+    .sort((a, b) => a.x - b.x || b.midi - a.midi)
+    .forEach((candidate) => {
+      const last = groups[groups.length - 1];
+      if (last && Math.abs(candidate.x - last.x) <= Math.max(4, spacing * 0.75)) {
+        last.items.push(candidate);
+        last.x = mean(last.items.map((item) => item.x));
+        return;
+      }
+      groups.push({ x: candidate.x, items: [candidate] });
+    });
+  return groups;
+}
+
+function assignVisionSystemBeats(binary, systems) {
+  let cursorBeat = 0;
+  systems.forEach((system) => {
+    const barlines = detectVisionBarlines(binary, system);
+    const boundaries = [system.left, ...barlines, system.right]
+      .filter((value, index, values) => index === 0 || Math.abs(value - values[index - 1]) > system.spacing * 0.9)
+      .sort((a, b) => a - b);
+    if (boundaries[boundaries.length - 1] < system.right - system.spacing * 2) boundaries.push(system.right);
+    system.boundaries = boundaries.length >= 2 ? boundaries : [system.left, system.right];
+    system.beatsPerMeasure = VISION_SCORE_DEFAULT_BEATS_PER_BAR;
+    system.startBeat = cursorBeat;
+    cursorBeat += Math.max(1, system.boundaries.length - 1) * system.beatsPerMeasure;
+  });
+}
+
+function visionBeatForX(system, x) {
+  const boundaries = system.boundaries || [system.left, system.right];
+  let measureIndex = Math.max(0, boundaries.length - 2);
+  for (let index = 0; index < boundaries.length - 1; index += 1) {
+    if (x >= boundaries[index] - system.spacing && x <= boundaries[index + 1] + system.spacing) {
+      measureIndex = index;
+      break;
+    }
+  }
+  const left = boundaries[measureIndex];
+  const right = Math.max(left + system.spacing, boundaries[measureIndex + 1]);
+  const local = Math.max(0, Math.min(0.995, (x - left) / (right - left)));
+  return system.startBeat + measureIndex * system.beatsPerMeasure + quantizeBeats(local * system.beatsPerMeasure, 0.25);
+}
+
+function estimateVisionNoteDuration(item, group, nextGroup, system, startBeatOffset) {
+  const measureEnd = startBeatOffset +
+    system.startBeat +
+    (Math.floor((group.startBeat - startBeatOffset - system.startBeat) / system.beatsPerMeasure) + 1) * system.beatsPerMeasure;
+  const nextBeat = nextGroup ? nextGroup.startBeat : measureEnd;
+  const naturalDuration = Math.max(0.125, Math.min(4, nextBeat - group.startBeat));
+  const visualDuration = Math.max(0.125, Number(item.valueBeats) || 1);
+
+  if (item.visualKind === "hollow") return quantizeBeats(Math.max(visualDuration, Math.min(4, naturalDuration)), 0.25);
+  if (item.visualKind === "hollow-stem") return quantizeBeats(Math.max(1, Math.min(2, Math.max(visualDuration, naturalDuration))), 0.25);
+  if (item.hasBeam) return quantizeBeats(Math.min(0.75, Math.max(0.25, naturalDuration)), 0.125);
+  if (item.hasStem) return quantizeBeats(Math.min(1.5, Math.max(0.25, naturalDuration)), 0.25);
+  return quantizeBeats(Math.max(0.25, Math.min(4, naturalDuration)), 0.25);
+}
+
+function classifyVisionPageLayout(systems, staves, candidates, beatGroupsBySystem, key) {
+  const groups = beatGroupsBySystem.flat();
+  const measureCount = systems.reduce((sum, system) => {
+    return sum + Math.max(1, (system.boundaries || [system.left, system.right]).length - 1);
+  }, 0);
+  const pairedSystems = systems.filter((system) => system.staves.length >= 2).length;
+  const simultaneous = groups.filter((group) => group.items.length >= 2);
+  const dense = groups.filter((group) => group.items.length >= 3);
+  const crossStaff = groups.filter((group) => new Set(group.items.map((item) => item.staffRole)).size > 1);
+  const beamed = groups.filter((group) => group.items.some((item) => item.hasBeam));
+  const hollow = candidates.filter((item) => /^hollow/.test(item.visualKind || ""));
+  const noteheadsPerMeasure = candidates.length / Math.max(1, measureCount);
+  const simultaneousRatio = simultaneous.length / Math.max(1, groups.length);
+  const pairedRatio = pairedSystems / Math.max(1, systems.length);
+  const bassRatio = candidates.filter((item) => item.staffRole === "bass").length / Math.max(1, candidates.length);
+  const trebleRatio = candidates.filter((item) => item.staffRole !== "bass").length / Math.max(1, candidates.length);
+  const densityScore = noteheadsPerMeasure + simultaneousRatio * 8 + dense.length / Math.max(1, measureCount) * 2.5 + beamed.length / Math.max(1, measureCount);
+
+  let complexity = "simple";
+  if (densityScore >= 26 || dense.length / Math.max(1, measureCount) >= 2.5) complexity = "dense";
+  else if (densityScore >= 15 || simultaneousRatio >= 0.42 || beamed.length / Math.max(1, measureCount) >= 1.2) complexity = "complex";
+  else if (densityScore >= 7 || simultaneousRatio >= 0.18) complexity = "moderate";
+
+  let texture = "single-line";
+  if (pairedRatio >= 0.6 && bassRatio > 0.22 && trebleRatio > 0.22 && simultaneousRatio > 0.36) texture = "piano chordal";
+  else if (pairedRatio >= 0.6 && bassRatio > 0.18 && trebleRatio > 0.3) texture = "melody + accompaniment";
+  else if (simultaneousRatio > 0.42) texture = "stacked chords";
+  else if (systems.length > 1) texture = "multi-system melody";
+
+  return {
+    engine: "local-vision-classifier",
+    texture,
+    complexity,
+    systemCount: systems.length,
+    staffCount: staves.length,
+    pairedSystemCount: pairedSystems,
+    measureCount,
+    candidateCount: candidates.length,
+    noteheadsPerMeasure,
+    simultaneousCount: simultaneous.length,
+    denseChordCount: dense.length,
+    crossStaffCount: crossStaff.length,
+    beamedGroupCount: beamed.length,
+    hollowNoteCount: hollow.length,
+    simultaneousRatio,
+    keySignature: key.label,
+    confidence: Math.max(0.25, Math.min(0.95, 0.42 + systems.length * 0.05 + candidates.length / Math.max(1, measureCount) * 0.015))
+  };
+}
+
+function mergeVisionClassifications(classifications) {
+  const valid = classifications.filter(Boolean);
+  if (!valid.length) return null;
+  const totals = valid.reduce((acc, item) => {
+    acc.systemCount += item.systemCount || 0;
+    acc.staffCount += item.staffCount || 0;
+    acc.pairedSystemCount += item.pairedSystemCount || 0;
+    acc.measureCount += item.measureCount || 0;
+    acc.candidateCount += item.candidateCount || 0;
+    acc.simultaneousCount += item.simultaneousCount || 0;
+    acc.denseChordCount += item.denseChordCount || 0;
+    acc.crossStaffCount += item.crossStaffCount || 0;
+    acc.beamedGroupCount += item.beamedGroupCount || 0;
+    acc.hollowNoteCount += item.hollowNoteCount || 0;
+    acc.confidence += item.confidence || 0;
+    return acc;
+  }, {
+    systemCount: 0,
+    staffCount: 0,
+    pairedSystemCount: 0,
+    measureCount: 0,
+    candidateCount: 0,
+    simultaneousCount: 0,
+    denseChordCount: 0,
+    crossStaffCount: 0,
+    beamedGroupCount: 0,
+    hollowNoteCount: 0,
+    confidence: 0
+  });
+  const complexityRank = { simple: 0, moderate: 1, complex: 2, dense: 3 };
+  const complexity = valid
+    .map((item) => item.complexity || "simple")
+    .sort((a, b) => (complexityRank[b] || 0) - (complexityRank[a] || 0))[0];
+  const textureCounts = new Map();
+  valid.forEach((item) => textureCounts.set(item.texture, (textureCounts.get(item.texture) || 0) + 1));
+  const texture = [...textureCounts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+
+  return {
+    ...totals,
+    engine: "local-vision-classifier",
+    texture,
+    complexity,
+    noteheadsPerMeasure: totals.candidateCount / Math.max(1, totals.measureCount),
+    simultaneousRatio: totals.simultaneousCount / Math.max(1, totals.candidateCount),
+    confidence: totals.confidence / Math.max(1, valid.length)
+  };
+}
+
+function buildVisionScoreDataFromCanvas(canvas, fileName, pageIndex = 0, startBeatOffset = 0) {
+  const binary = buildVisionBinary(canvas);
+  const staves = detectVisionStaves(binary);
+  if (staves.length < 1) {
+    throw new Error("Local vision OMR could not find staff lines in the image.");
+  }
+
+  const systems = pairVisionGrandStaves(staves);
+  assignVisionSystemBeats(binary, systems);
+  const key = detectVisionKeyFifths(binary, systems);
+  const keyId = keyIdFromFifths(key.fifths) || state.keyId;
+  const candidates = detectVisionNoteCandidates(binary, systems, key.fifths);
+  const notes = [];
+  const beatGroupsBySystem = [];
+
+  systems.forEach((system) => {
+    const groups = groupVisionCandidatesByX(
+      candidates.filter((candidate) => candidate.systemIndex === system.index),
+      system.spacing
+    );
+    const beatGroups = groups.map((group) => ({
+      ...group,
+      startBeat: startBeatOffset + visionBeatForX(system, group.x)
+    })).sort((a, b) => a.startBeat - b.startBeat || a.x - b.x);
+    beatGroupsBySystem.push(beatGroups);
+
+    beatGroups.forEach((group, index) => {
+      const next = beatGroups[index + 1];
+      const unique = [];
+      group.items
+        .sort((a, b) => b.midi - a.midi)
+        .forEach((item) => {
+          if (!unique.some((existing) => Math.abs(existing.midi - item.midi) <= 0.1 && existing.staffRole === item.staffRole)) {
+            unique.push(item);
+          }
+        });
+
+      unique.forEach((item) => {
+        const durationBeats = estimateVisionNoteDuration(item, group, next, system, startBeatOffset);
+        notes.push({
+          startBeat: group.startBeat,
+          endBeat: group.startBeat + durationBeats,
+          durationBeats,
+          midi: item.midi,
+          pitch: pitchNameForMidi(item.midi, keyId),
+          staff: item.staffRole,
+          voice: item.staffRole === "bass" ? "2" : "1",
+          part: `vision-page-${pageIndex + 1}`,
+          confidence: item.confidence,
+          role: item.staffRole === "bass" ? "bass" : "melody",
+          visualKind: item.visualKind,
+          source: "vision"
+        });
+      });
+    });
+  });
+
+  const classification = classifyVisionPageLayout(systems, staves, candidates, beatGroupsBySystem, key);
+  const warnings = [
+    `Local vision OMR found ${systems.length} system${systems.length === 1 ? "" : "s"} and ${staves.length} staff group${staves.length === 1 ? "" : "s"}.`,
+    `Auto classification: ${classification.complexity} ${classification.texture}; ${classification.simultaneousCount} simultaneous group${classification.simultaneousCount === 1 ? "" : "s"}, ${classification.denseChordCount} dense chord stack${classification.denseChordCount === 1 ? "" : "s"}, ${classification.beamedGroupCount} beamed/fast group${classification.beamedGroupCount === 1 ? "" : "s"}.`,
+    `Key-signature estimate: ${key.label}; tempo OCR is not used, so BPM comes from the BPM control.`
+  ];
+  if (!notes.length) warnings.push("Local vision OMR found staff lines but no confident noteheads.");
+
+  return normalizeScoreData({
+    title: fileName.replace(/\.[^.]+$/, "") || "Vision score",
+    bpm: state.bpm,
+    key: keyId,
+    timeSignature: {
+      beats: VISION_SCORE_DEFAULT_BEATS_PER_BAR,
+      beatType: 4
+    },
+    notes,
+    warnings,
+    classification,
+    sourceType: "vision"
+  });
+}
+
+async function analyzeImageScoreWithVision(file) {
+  setScoreStatus("Local vision OMR: loading image");
+  const canvas = await imageFileToVisionCanvas(file);
+  setScoreStatus("Local vision OMR: detecting staves and noteheads");
+  return buildVisionScoreDataFromCanvas(canvas, file.name, 0, 0);
+}
+
+async function renderPdfCanvasesForVision(file) {
+  const pdfjs = await import(SCORE_PDF_JS_URL);
+  pdfjs.GlobalWorkerOptions.workerSrc = SCORE_PDF_WORKER_URL;
+  const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+  const pageCount = Math.min(pdf.numPages, SCORE_MAX_OMR_PAGES);
+  const pages = [];
+
+  for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
+    setScoreStatus(`Local vision OMR: rendering PDF page ${pageNumber}/${pageCount}`);
+    const page = await pdf.getPage(pageNumber);
+    const initial = page.getViewport({ scale: 1 });
+    const scale = Math.min(
+      VISION_SCORE_MAX_SCALE,
+      VISION_SCORE_MAX_WIDTH / initial.width,
+      VISION_SCORE_MAX_HEIGHT / initial.height
+    );
+    const viewport = page.getViewport({ scale });
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.ceil(viewport.width);
+    canvas.height = Math.ceil(viewport.height);
+    const context = canvas.getContext("2d");
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    await page.render({ canvasContext: context, viewport }).promise;
+    pages.push(canvas);
+  }
+  return pages;
+}
+
+async function analyzePdfScoreWithVision(file) {
+  const canvases = await renderPdfCanvasesForVision(file);
+  const merged = {
+    title: file.name.replace(/\.[^.]+$/, "") || "Vision PDF score",
+    bpm: state.bpm,
+    key: state.keyId,
+    timeSignature: { beats: VISION_SCORE_DEFAULT_BEATS_PER_BAR, beatType: 4 },
+    notes: [],
+    warnings: [],
+    sourceType: "vision-pdf"
+  };
+  let beatOffset = 0;
+  const classifications = [];
+
+  canvases.forEach((canvas, index) => {
+    setScoreStatus(`Local vision OMR: reading PDF page ${index + 1}/${canvases.length}`);
+    const pageScore = buildVisionScoreDataFromCanvas(canvas, file.name, index, beatOffset);
+    merged.notes.push(...pageScore.notes);
+    merged.warnings.push(...pageScore.warnings.map((warning) => `Page ${index + 1}: ${warning}`));
+    if (pageScore.classification) classifications.push(pageScore.classification);
+    if (pageScore.keyId && index === 0) merged.key = pageScore.keyId;
+    beatOffset = Math.max(beatOffset, pageScore.durationBeats + beatOffset);
+  });
+  merged.classification = mergeVisionClassifications(classifications);
+
+  return normalizeScoreData(merged);
+}
+
+function skyButtonCandidatesForMidi(midi, keyId = state.keyId, used = []) {
+  return SKY_BUTTONS.map((button) => {
+    const skyMidi = skyMidiForButton(button.id, keyId);
+    const distance = Math.abs(midi - skyMidi);
+    const centerCost = Math.abs(button.id - 8) * 0.026;
+    const usedPenalty = used.includes(button.id) ? 4 : 0;
+    return {
+      buttonId: button.id,
+      skyMidi,
+      distance,
+      score: distance + centerCost + usedPenalty
+    };
+  }).sort((a, b) => a.score - b.score);
+}
+
+function chooseSkyButtonForScoreMidi(midi, keyId = state.keyId, used = []) {
+  return skyButtonCandidatesForMidi(midi, keyId, used)[0] || null;
+}
+
+function scoreSkyKeyForNotes(keyId, notes) {
+  if (!notes.length) return Infinity;
+  let weightedDistance = 0;
+  let totalWeight = 0;
+  notes.forEach((note) => {
+    const mapping = chooseSkyButtonForScoreMidi(note.midi, keyId);
+    const roleWeight = /right|treble|melody/i.test(note.staff || "") ? 1.35 : /left|bass/i.test(note.staff || "") ? 0.82 : 1;
+    const durationWeight = Math.max(0.125, note.durationBeats || 0.25);
+    const confidence = Math.max(0.2, note.confidence || 0.7);
+    const weight = roleWeight * durationWeight * confidence;
+    weightedDistance += mapping.distance * weight;
+    totalWeight += weight;
+  });
+  return weightedDistance / Math.max(0.001, totalWeight);
+}
+
+function estimateBestSkyKeyForScore(scoreData, strategy) {
+  const scoreKey = scoreData.keyId;
+  if (strategy === "selected") {
+    return {
+      keyId: state.keyId,
+      score: scoreSkyKeyForNotes(state.keyId, scoreData.notes || []),
+      reason: "selected"
+    };
+  }
+
+  if (strategy === "score" && scoreKey) {
+    return {
+      keyId: scoreKey,
+      score: scoreSkyKeyForNotes(scoreKey, scoreData.notes || []),
+      reason: "score"
+    };
+  }
+
+  let best = null;
+  KEY_CONFIGS.forEach((config) => {
+    const distanceScore = scoreSkyKeyForNotes(config.id, scoreData.notes || []);
+    const keyBonus = scoreKey === config.id ? -0.18 : 0;
+    const score = distanceScore + keyBonus;
+    if (!best || score < best.score) {
+      best = {
+        keyId: config.id,
+        score,
+        distanceScore,
+        reason: "auto"
+      };
+    }
+  });
+  return best || { keyId: state.keyId, score: Infinity, reason: "fallback" };
+}
+
+function scoreArrangementSettings(mode, maxKeys, classification = null) {
+  const base = SCORE_ARRANGEMENT_LIMITS[mode] || SCORE_ARRANGEMENT_LIMITS.balanced;
+  const settings = {
+    ...base,
+    mode,
+    maxKeys: Math.max(1, Math.min(4, Number(maxKeys) || 4))
+  };
+
+  if (classification && mode !== "melody") {
+    if (classification.complexity === "dense" || classification.texture === "piano chordal") {
+      settings.splitThreshold = Math.min(settings.splitThreshold, 3);
+      settings.harmonyShare = Math.max(settings.harmonyShare, 0.72);
+      settings.bassShare = Math.max(settings.bassShare, 0.72);
+    }
+    if (classification.texture === "melody + accompaniment") {
+      settings.bassShare = Math.max(settings.bassShare, 0.7);
+    }
+  }
+
+  return settings;
+}
+
+function classifyScorePitch(note, group) {
+  if (/melody|foreground|lead/i.test(note.role || "")) return "melody";
+  if (/bass|background|left/i.test(note.role || "")) return "bass";
+  if (/harmony|chord/i.test(note.role || "")) return "harmony";
+  const sorted = [...group.notes].sort((a, b) => a.midi - b.midi);
+  const lowest = sorted[0];
+  const highest = sorted[sorted.length - 1];
+  if (note === highest || note.midi === highest.midi || /right|treble|melody/i.test(note.staff || "")) return "melody";
+  if (note === lowest || note.midi === lowest.midi || /left|bass/i.test(note.staff || "")) return "bass";
+  return "harmony";
+}
+
+function priorityForScorePitch(note, role, settings) {
+  const duration = Math.max(0.125, note.durationBeats || 0.25);
+  const confidence = Math.max(0.2, note.confidence || 0.7);
+  const roleScore = role === "melody" ? 4 : role === "bass" ? 2.4 : 1.6;
+  const modeScore = settings.mode === "melody" && role !== "melody" ? -0.8 : settings.mode === "full" ? 0.35 : 0;
+  return roleScore + modeScore + duration * 0.08 + confidence * 0.2 + note.midi * 0.001;
+}
+
+function chooseChromaticCompanion(midi, keyId, used, primary) {
+  if (!primary || primary.distance < 0.65 || primary.distance > 2.15) return null;
+  const direction = primary.skyMidi < midi ? 1 : -1;
+  const candidates = skyButtonCandidatesForMidi(midi, keyId, used)
+    .filter((candidate) => candidate.buttonId !== primary.buttonId)
+    .filter((candidate) => direction > 0 ? candidate.skyMidi > primary.skyMidi : candidate.skyMidi < primary.skyMidi)
+    .filter((candidate) => Math.abs(candidate.skyMidi - midi) <= 3.25);
+  return candidates[0] || null;
+}
+
+function mapScorePitchLayer(notes, keyId, settings, substitutions) {
+  const used = [];
+  const mappings = [];
+  const ordered = notes
+    .map((note) => ({
+      note,
+      role: note.role || "harmony",
+      priority: priorityForScorePitch(note, note.role || "harmony", settings)
+    }))
+    .sort((a, b) => b.priority - a.priority || b.note.midi - a.note.midi);
+
+  ordered.forEach((entry) => {
+    if (used.length >= settings.maxKeys) return;
+    const primary = chooseSkyButtonForScoreMidi(entry.note.midi, keyId, used);
+    if (!primary || used.includes(primary.buttonId)) return;
+    used.push(primary.buttonId);
+    mappings.push({
+      sourceMidi: entry.note.midi,
+      sourcePitch: pitchNameForMidi(entry.note.midi, keyId),
+      role: entry.role,
+      buttonId: primary.buttonId,
+      skyMidi: primary.skyMidi,
+      distance: primary.distance,
+      substituted: primary.distance >= 0.65,
+      companion: false
+    });
+
+    if (settings.mode !== "melody" && used.length < settings.maxKeys && primary.distance >= 0.65) {
+      const companion = chooseChromaticCompanion(entry.note.midi, keyId, used, primary);
+      if (companion) {
+        used.push(companion.buttonId);
+        mappings.push({
+          sourceMidi: entry.note.midi,
+          sourcePitch: pitchNameForMidi(entry.note.midi, keyId),
+          role: `${entry.role}-color`,
+          buttonId: companion.buttonId,
+          skyMidi: companion.skyMidi,
+          distance: Math.abs(companion.skyMidi - entry.note.midi),
+          substituted: true,
+          companion: true
+        });
+      }
+    }
+  });
+
+  mappings.forEach((mapping) => {
+    if (mapping.substituted) {
+      substitutions.push({
+        sourcePitch: mapping.sourcePitch,
+        sky: getButton(mapping.buttonId).abc,
+        skyPitch: pitchNameForMidi(mapping.skyMidi, keyId),
+        distance: mapping.distance,
+        role: mapping.role
+      });
+    }
+  });
+
+  return mappings.sort((a, b) => a.buttonId - b.buttonId);
+}
+
+function splitScoreGroupIntoLayers(group, settings) {
+  const notes = group.notes.map((note) => ({
+    ...note,
+    role: classifyScorePitch(note, group)
+  }));
+  const melody = notes.filter((note) => note.role === "melody").sort((a, b) => b.midi - a.midi);
+  const bass = notes.filter((note) => note.role === "bass").sort((a, b) => a.midi - b.midi);
+  const harmony = notes.filter((note) => note.role === "harmony").sort((a, b) => b.midi - a.midi);
+
+  if (settings.mode === "melody") {
+    return [melody.slice(0, 1).length ? melody.slice(0, 1) : notes.slice(-1)];
+  }
+
+  if (notes.length <= settings.maxKeys && notes.length < settings.splitThreshold) return [notes];
+
+  const first = [];
+  const second = [];
+  if (bass[0]) first.push(bass[0]);
+  harmony.slice(0, Math.max(0, settings.maxKeys - first.length)).forEach((note) => first.push(note));
+  melody.slice(0, 1).forEach((note) => second.push(note));
+  harmony.slice(0, Math.max(0, settings.maxKeys - second.length - 1)).forEach((note) => {
+    if (!second.includes(note)) second.push(note);
+  });
+  if (bass[0] && settings.mode === "full" && second.length < settings.maxKeys && group.durationBeats >= 0.75) second.push(bass[0]);
+
+  const layers = [first, second]
+    .map((layer) => layer.filter(Boolean))
+    .filter((layer) => layer.length);
+  return layers.length ? layers : [notes.slice(0, settings.maxKeys)];
+}
+
+function shouldKeepScoreGroup(group, settings, index) {
+  if (group.notes.some((note) => classifyScorePitch(note, group) === "melody")) return true;
+  if (settings.mode === "full") return true;
+  const beatWindow = group.startBeat % COMBINED_BEATS_PER_BAR;
+  const onStrongBeat = Math.abs(beatWindow) < 0.08 || Math.abs(beatWindow - 2) < 0.08;
+  if (onStrongBeat) return true;
+  const ratio = settings.mode === "melody" ? settings.harmonyShare : settings.harmonyShare + settings.bassShare * 0.15;
+  return (index % Math.max(2, Math.round(1 / Math.max(0.1, ratio)))) === 0;
+}
+
+function buildScoreSkyEvents(scoreData, keyId, settings) {
+  const substitutions = [];
+  const mappings = [];
+  const splitGroups = [];
+  const beatSeconds = 60 / clampTempo(scoreData.bpm, state.bpm);
+  const rawEvents = [];
+  const sortedGroups = scoreData.events.slice(0, SCORE_MAX_EVENTS).sort((a, b) => a.startBeat - b.startBeat);
+
+  sortedGroups.forEach((group, groupIndex) => {
+    if (!group.notes.length || !shouldKeepScoreGroup(group, settings, groupIndex)) return;
+    const groupChord = group.notes.length >= 2 ? detectChordFromMidiPitches(group.notes.map((note) => note.midi), keyId) : null;
+    const layers = splitScoreGroupIntoLayers(group, settings);
+    const layerCount = Math.max(1, layers.length);
+    const splitDuration = group.durationBeats / layerCount;
+    if (layerCount > 1) splitGroups.push(group.startBeat);
+
+    layers.forEach((layer, layerIndex) => {
+      const mapped = mapScorePitchLayer(layer, keyId, settings, substitutions);
+      const notes = [...new Set(mapped.map((mapping) => mapping.buttonId))].sort((a, b) => a - b);
+      if (!notes.length) return;
+      const startBeat = group.startBeat + layerIndex * splitDuration;
+      const duration = quantizeBeats(Math.max(0.125, splitDuration), 0.125);
+      const event = {
+        type: "note",
+        notes,
+        duration,
+        time: startBeat * beatSeconds,
+        kind: layerCount > 1 ? "score-split" : group.notes.length >= 2 ? "score-chord" : "score",
+        label: groupChord && groupChord.label !== "N.C." ? groupChord.label : layer.map((note) => pitchNameForMidi(note.midi, keyId)).join("+"),
+        strength: group.confidence || 0.82
+      };
+      rawEvents.push(event);
+      mapped.forEach((mapping) => {
+        mappings.push({
+          time: startBeat * beatSeconds,
+          beat: startBeat,
+          sourcePitch: mapping.sourcePitch,
+          sourceMidi: mapping.sourceMidi,
+          sky: getButton(mapping.buttonId).abc,
+          skyPitch: pitchNameForMidi(mapping.skyMidi, keyId),
+          distance: mapping.distance,
+          role: mapping.role,
+          chord: event.label,
+          kind: event.kind
+        });
+      });
+    });
+  });
+
+  const tempoEstimate = { bpm: clampTempo(scoreData.bpm, state.bpm), confidence: 0.92, source: "score" };
+  const enhanced = enhanceSheetFlow(rawEvents, tempoEstimate, els.enhancerSelect ? els.enhancerSelect.value : "threePhase");
+  return {
+    rawEvents,
+    events: enhanced.events,
+    mappings,
+    substitutions,
+    splitGroups,
+    enhancementSummary: enhanced.summary
+  };
+}
+
+function detectChordFromMidiPitches(midis, keyId = state.keyId) {
+  const cleanMidis = midis
+    .map((midi) => Math.round(Number(midi)))
+    .filter((midi) => Number.isFinite(midi));
+  const pcs = [...new Set(cleanMidis.map((midi) => normalizePc(midi)))];
+  if (pcs.length < 2) {
+    return {
+      label: "N.C.",
+      rootPc: 0,
+      template: null,
+      suffix: "",
+      intervals: [],
+      score: 0
+    };
+  }
+
+  const bassPc = normalizePc(Math.min(...cleanMidis));
+  let best = null;
+  for (let rootPc = 0; rootPc < 12; rootPc += 1) {
+    CHORD_TEMPLATES.forEach((template) => {
+      const templatePcs = template.intervals.map((interval) => normalizePc(rootPc + interval));
+      const matched = pcs.filter((pc) => templatePcs.includes(pc)).length;
+      const missing = templatePcs.filter((pc) => !pcs.includes(pc)).length;
+      const extras = pcs.filter((pc) => !templatePcs.includes(pc)).length;
+      const hasThird = template.intervals.some((interval) => interval === 3 || interval === 4);
+      const rootPresent = pcs.includes(rootPc);
+      const bassBonus = bassPc === rootPc ? 0.2 : rootPresent ? 0.1 : 0;
+      const inversionBonus = bassPc !== rootPc && templatePcs.includes(bassPc) ? 0.06 : 0;
+      const missingPenalty = template.intervals.length <= 2 ? 0.24 : hasThird ? 0.2 : 0.16;
+      const score = matched / templatePcs.length - missing * missingPenalty - extras * 0.08 + bassBonus + inversionBonus;
+      if (!best || score > best.score) {
+        best = { rootPc, template, score, matched, missing, extras };
+      }
+    });
+  }
+
+  if (!best || best.score < 0.38) {
+    return {
+      label: "N.C.",
+      rootPc: 0,
+      template: null,
+      suffix: "",
+      intervals: [],
+      score: Math.max(0, best ? best.score : 0)
+    };
+  }
+
+  return {
+    label: chordLabelWithBass(best.rootPc, best.template, bassPc, keyId),
+    rootPc: best.rootPc,
+    bassPc,
+    template: best.template.name,
+    suffix: best.template.suffix,
+    intervals: best.template.intervals,
+    matched: best.matched,
+    missing: best.missing,
+    extras: best.extras,
+    score: Math.max(0, Math.min(1, best.score))
+  };
+}
+
+function buildScoreChordSegments(scoreData, beatSeconds, keyId) {
+  const frames = scoreData.events
+    .filter((group) => group.notes.length >= 2)
+    .map((group) => {
+      const chord = detectChordFromMidiPitches(group.notes.map((note) => note.midi), keyId);
+      return {
+        start: group.startBeat * beatSeconds,
+        end: Math.max(group.endBeat, group.startBeat + group.durationBeats) * beatSeconds,
+        label: chord.label,
+        rootPc: chord.rootPc,
+        bassPc: chord.bassPc,
+        template: chord.template,
+        suffix: chord.suffix,
+        intervals: chord.intervals,
+        noteCount: group.notes.length,
+        simultaneous: group.notes.length >= 2,
+        crossStaff: new Set(group.notes.map((note) => note.staff || "")).size > 1,
+        pitches: group.notes.map((note) => pitchNameForMidi(note.midi, keyId)),
+        score: chord.score
+      };
+    });
+  return mergeFrames(frames);
+}
+
+function buildScoreMelodyAndBackground(scoreData, beatSeconds, keyId) {
+  const melody = [];
+  const background = [];
+  scoreData.events.forEach((group) => {
+    if (!group.notes.length) return;
+    const sorted = [...group.notes].sort((a, b) => b.midi - a.midi);
+    const melodyNote = sorted[0];
+    sorted.forEach((note) => {
+      const target = note === melodyNote ? melody : background;
+      const mapping = chooseSkyButtonForMidi(note.midi, keyId);
+      target.push({
+        start: note.startBeat * beatSeconds,
+        end: note.endBeat * beatSeconds,
+        buttonId: mapping.buttonId,
+        rawMidi: note.midi,
+        midi: note.midi,
+        confidence: note.confidence || 0.82,
+        source: note === melodyNote ? "score-melody" : "score-background",
+        staff: note.staff
+      });
+    });
+  });
+  return {
+    melodyNotes: markRecurringThemes(mergeNearDuplicateNotes(melody)),
+    backgroundNotes: markRecurringThemes(mergeNearDuplicateNotes(background))
+  };
+}
+
+function buildScoreRhythmHits(scoreData, beatSeconds) {
+  return scoreData.events.map((group, index) => {
+    const beatIndex = Math.round(group.startBeat);
+    return {
+      time: group.startBeat * beatSeconds,
+      strength: Math.max(0.28, Math.min(1, 0.35 + group.notes.length * 0.14 + (group.confidence || 0.5) * 0.18)),
+      score: group.notes.length,
+      beatIndex,
+      beatLabel: `${Math.floor(beatIndex / COMBINED_BEATS_PER_BAR) + 1}.${(beatIndex % COMBINED_BEATS_PER_BAR) + 1}`,
+      source: "score"
+    };
+  });
+}
+
+function scoreChroma(scoreData) {
+  const chroma = Array(12).fill(0);
+  scoreData.notes.forEach((note) => {
+    chroma[normalizePc(Math.round(note.midi))] += Math.max(0.125, note.durationBeats || 0.25) * Math.max(0.2, note.confidence || 0.7);
+  });
+  return chroma;
+}
+
+function convertScoreDataToSky(scoreData, options = {}) {
+  const strategy = options.keyStrategy || "auto";
+  const maxKeys = options.maxKeys || 4;
+  const arrangement = options.arrangement || "balanced";
+  const tempo = clampTempo(scoreData.bpm, state.bpm);
+  scoreData.bpm = tempo;
+  const bestKey = estimateBestSkyKeyForScore(scoreData, strategy);
+  const classification = scoreData.classification || classifyScoreDataStructure(scoreData);
+  const settings = scoreArrangementSettings(arrangement, maxKeys, classification);
+  const beatSeconds = 60 / tempo;
+  const conversion = buildScoreSkyEvents(scoreData, bestKey.keyId, settings);
+  const tracks = buildScoreMelodyAndBackground(scoreData, beatSeconds, bestKey.keyId);
+  const chordSegments = buildScoreChordSegments(scoreData, beatSeconds, bestKey.keyId);
+  const rhythmHits = buildScoreRhythmHits(scoreData, beatSeconds);
+  const keyGuess = estimateMajorKey(scoreChroma(scoreData));
+  const warnings = [...scoreData.warnings];
+  if (classification.texture && classification.complexity) {
+    warnings.push(`Score classifier: ${classification.complexity} ${classification.texture}, ${classification.simultaneousCount || 0} simultaneous groups, ${classification.denseChordCount || 0} dense chord stacks.`);
+  }
+  if (bestKey.score > 0.9) warnings.push("Many score pitches are outside the selected Sky panel; chromatic notes were approximated.");
+  if (conversion.splitGroups.length) warnings.push(`${conversion.splitGroups.length} dense piano chords were split into alternating Sky gestures.`);
+  if (conversion.substitutions.length) warnings.push(`${conversion.substitutions.length} chromatic or out-of-range tones used nearest/color Sky substitutions.`);
+  if (scoreData.events.length > SCORE_MAX_EVENTS) warnings.push(`Only the first ${SCORE_MAX_EVENTS} score onsets were arranged.`);
+
+  return {
+    fileName: options.fileName || "",
+    sourceType: scoreData.sourceType,
+    title: scoreData.title,
+    bpm: tempo,
+    keyGuess: keyGuess || (scoreData.keyId ? {
+      keyId: scoreData.keyId,
+      label: keyConfigById(scoreData.keyId).label,
+      score: 1
+    } : null),
+    skyKeyId: bestKey.keyId,
+    skyKeyScore: bestKey.score,
+    noteCount: scoreData.notes.length,
+    chordCount: chordSegments.filter((segment) => segment.label !== "N.C.").length,
+    simultaneousCount: classification.simultaneousCount || 0,
+    denseChordCount: classification.denseChordCount || 0,
+    texture: classification.texture || "",
+    complexity: classification.complexity || "",
+    substitutionCount: conversion.substitutions.length,
+    splitCount: conversion.splitGroups.length,
+    combinedEvents: conversion.events,
+    rawEvents: conversion.rawEvents,
+    melodyNotes: tracks.melodyNotes,
+    backgroundNotes: tracks.backgroundNotes,
+    chordSegments,
+    rhythmHits,
+    warnings,
+    mappings: conversion.mappings,
+    substitutions: conversion.substitutions,
+    classification,
+    confidence: scoreData.confidence,
+    omrModel: options.omrModel || "",
+    durationBeats: scoreData.durationBeats,
+    tempoEstimate: { bpm: tempo, confidence: 0.92, source: "score" },
+    enhancementSummary: conversion.enhancementSummary
+  };
+}
+
+async function callScoreOmrApi(file, preparedFiles) {
+  let response;
+  try {
+    response = await fetch(scoreOmrEndpoint(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: els.titleInput.value || file.name,
+        selectedSkyKey: currentConfig().label,
+        keyStrategy: els.scoreKeyStrategySelect.value,
+        files: preparedFiles
+      })
+    });
+  } catch (error) {
+    throw new Error(scoreOmrServerError(error && error.message ? error.message : "fetch failed"));
+  }
+
+  const rawText = await response.text();
+  let payload = {};
+  try {
+    payload = rawText ? JSON.parse(rawText) : {};
+  } catch {
+    payload = {};
+  }
+  if (!response.ok) {
+    throw new Error(payload.error || rawText.slice(0, 200) || "Score OMR failed");
+  }
+  return payload;
+}
+
+async function prepareScoreFilesForOmr(file) {
+  const payload = dataUrlToPayload(await readFileAsDataUrl(file), file.type || "application/octet-stream");
+  return [{
+    name: file.name,
+    mediaType: payload.mediaType,
+    data: payload.data
+  }];
+}
+
+async function loadScoreDataFromFile(file) {
+  if (isScoreXmlFile(file)) {
+    setScoreStatus("Parsing MusicXML");
+    return {
+      scoreData: parseMusicXmlScore(await file.text(), file.name),
+      sourceType: "musicxml"
+    };
+  }
+
+  if (isScoreJsonFile(file)) {
+    setScoreStatus("Parsing score JSON");
+    const parsed = JSON.parse(await file.text());
+    return {
+      scoreData: normalizeScoreData(parsed),
+      sourceType: "json"
+    };
+  }
+
+  if (isScoreTextFile(file) && !isScoreImageFile(file)) {
+    setScoreStatus("Parsing text score");
+    return {
+      scoreData: parseScoreText(await file.text(), file.name),
+      sourceType: "text"
+    };
+  }
+
+  if (isScoreImageFile(file)) {
+    const scoreData = await analyzeImageScoreWithVision(file);
+    return {
+      scoreData,
+      sourceType: "vision",
+      omrModel: "local-vision"
+    };
+  }
+
+  if (isScorePdfFile(file)) {
+    const scoreData = await analyzePdfScoreWithVision(file);
+    return {
+      scoreData,
+      sourceType: "vision-pdf",
+      omrModel: "local-vision"
+    };
+  }
+
+  if (!isScoreMxlFile(file)) {
+    throw new Error("Unsupported score file. Use PNG/JPG/PDF, MusicXML/XML, MXL, JSON, or text note names.");
+  }
+
+  setScoreStatus("Extracting MXL score");
+  const preparedFiles = await prepareScoreFilesForOmr(file);
+  setScoreStatus("Extracting MXL with local API route");
+  const payload = await callScoreOmrApi(file, preparedFiles);
+
+  if (payload.musicXml) {
+    return {
+      scoreData: parseMusicXmlScore(payload.musicXml, file.name),
+      sourceType: payload.sourceType || "mxl",
+      omrModel: payload.model || "",
+      endpoint: payload.endpoint || ""
+    };
+  }
+
+  throw new Error("Score route did not return MusicXML");
+}
+
+function applyScoreConversion(file, loaded) {
+  const scoreData = loaded.scoreData;
+  const conversion = convertScoreDataToSky(scoreData, {
+    fileName: file.name,
+    keyStrategy: els.scoreKeyStrategySelect.value || "auto",
+    arrangement: els.scoreArrangementSelect.value || "balanced",
+    maxKeys: Number(els.scoreMaxKeysSelect.value) || 4,
+    omrModel: loaded.omrModel || ""
+  });
+
+  state.keyId = conversion.skyKeyId || state.keyId;
+  state.bpm = conversion.bpm || state.bpm;
+  state.scoreAnalysis = {
+    ...conversion,
+    fileName: file.name,
+    sourceType: loaded.sourceType || conversion.sourceType,
+    omrModel: loaded.omrModel || conversion.omrModel,
+    scoreData
+  };
+  state.chordAnalysis = {
+    fileName: file.name,
+    duration: conversion.durationBeats * (60 / Math.max(30, conversion.bpm || state.bpm)),
+    keyGuess: conversion.keyGuess,
+    segments: conversion.chordSegments,
+    refinedText: "",
+    melodyNotes: conversion.melodyNotes,
+    foregroundNotes: conversion.melodyNotes,
+    backgroundNotes: conversion.backgroundNotes,
+    neuralNotes: [],
+    rhythmHits: conversion.rhythmHits,
+    combinedEvents: conversion.combinedEvents,
+    tempoEstimate: conversion.tempoEstimate,
+    tuning: {
+      keyId: conversion.skyKeyId,
+      score: conversion.skyKeyScore
+    },
+    analysisProfile: "score",
+    feelDensity: els.scoreArrangementSelect.value || "balanced",
+    playability: els.playabilitySelect ? els.playabilitySelect.value : "human",
+    enhancerMode: els.enhancerSelect ? els.enhancerSelect.value : "threePhase",
+    enhancementSummary: conversion.enhancementSummary,
+    quality: null,
+    correctionSummary: null,
+    inputSignature: null,
+    wordingAssignments: []
+  };
+
+  if (
+    scoreData.title &&
+    scoreData.title !== "Imported score" &&
+    (!els.titleInput.value.trim() || els.titleInput.value === "Untitled Sky Sheet")
+  ) {
+    els.titleInput.value = scoreData.title;
+  }
+
+  syncControls();
+  renderAll();
+  const keyLabel = keyConfigById(state.keyId).label;
+  setScoreStatus(`${file.name}: ${conversion.noteCount} notes mapped to ${keyLabel}, ${conversion.combinedEvents.length} boxes`);
+  setAudioStatus(`Score import populated melody, chord, rhythm, and combined outputs`);
+}
+
+async function analyzeScoreFile() {
+  const file = els.scoreFileInput && els.scoreFileInput.files && els.scoreFileInput.files[0];
+  if (!file) {
+    setScoreStatus("Choose a score file");
+    return;
+  }
+
+  els.analyzeScoreBtn.disabled = true;
+  els.importScoreBtn.disabled = true;
+  setScoreStatus("Loading score");
+
+  try {
+    const loaded = await loadScoreDataFromFile(file);
+    applyScoreConversion(file, loaded);
+  } catch (error) {
+    console.error(error);
+    state.scoreAnalysis = {
+      fileName: "",
+      sourceType: "",
+      title: "",
+      bpm: null,
+      keyGuess: null,
+      skyKeyId: null,
+      noteCount: 0,
+      chordCount: 0,
+      simultaneousCount: 0,
+      denseChordCount: 0,
+      texture: "",
+      complexity: "",
+      substitutionCount: 0,
+      splitCount: 0,
+      combinedEvents: [],
+      melodyNotes: [],
+      backgroundNotes: [],
+      chordSegments: [],
+      rhythmHits: [],
+      warnings: [error && error.message ? error.message : "Score analysis failed"],
+      mappings: [],
+      classification: null,
+      confidence: null,
+      omrModel: "",
+      durationBeats: 0
+    };
+    renderScoreAnalysis();
+    setScoreStatus(error && error.message ? `Score failed: ${String(error.message).slice(0, 100)}` : "Score analysis failed");
+  } finally {
+    els.analyzeScoreBtn.disabled = false;
+  }
+}
+
+function renderScoreAnalysis() {
+  if (!els.scoreResultList) return;
+  const analysis = state.scoreAnalysis;
+  const events = analysis.combinedEvents || [];
+  const noteEvents = events.filter((event) => event.type === "note");
+  els.importScoreBtn.disabled = noteEvents.length === 0;
+  els.scoreKeyText.textContent = analysis.skyKeyId ? keyConfigById(analysis.skyKeyId).label : "-";
+  els.scoreBpmText.textContent = analysis.bpm ? String(analysis.bpm) : "-";
+  els.scoreNoteCountText.textContent = String(analysis.noteCount || 0);
+  els.scoreChordCountText.textContent = String(analysis.chordCount || 0);
+  els.scoreTextureText.textContent = analysis.texture
+    ? `${analysis.complexity || "score"} ${analysis.texture}`.trim()
+    : "-";
+  els.scoreSimultaneousCountText.textContent = String(analysis.simultaneousCount || 0);
+  els.scoreSubstitutionCountText.textContent = String(analysis.substitutionCount || 0);
+  els.scoreSplitCountText.textContent = String(analysis.splitCount || 0);
+  els.scoreCombinedCountText.textContent = String(events.filter((event) => event.type !== "bar" && event.type !== "line").length);
+  els.scoreSourceText.textContent = analysis.sourceType || "-";
+  els.scoreOutputText.value = events.length ? joinTokens(events, abcForEvent) : "";
+  els.scoreWarningsText.value = (analysis.warnings || []).join("\n");
+
+  els.scoreResultList.innerHTML = "";
+  if (!analysis.mappings || !analysis.mappings.length) {
+    els.scoreResultList.innerHTML = '<div class="score-row"><span class="name">No score map yet</span></div>';
+    return;
+  }
+
+  analysis.mappings.slice(0, 900).forEach((mapping) => {
+    const row = document.createElement("div");
+    row.className = "score-row";
+
+    const time = document.createElement("span");
+    time.className = "time";
+    time.textContent = formatTime(mapping.time || 0);
+
+    const name = document.createElement("span");
+    name.className = "name";
+    name.textContent = mapping.chord && mapping.chord !== mapping.sourcePitch
+      ? `${mapping.sourcePitch} · ${mapping.chord}`
+      : mapping.sourcePitch;
+
+    const sky = document.createElement("span");
+    sky.className = "sky";
+    sky.textContent = `${mapping.sky}:${mapping.skyPitch}`;
+
+    const score = document.createElement("span");
+    score.className = "score";
+    score.textContent = mapping.distance ? `${mapping.distance.toFixed(1)}st` : "exact";
+
+    row.append(time, name, sky, score);
+    els.scoreResultList.append(row);
+  });
+}
+
+function importScoreArrangement() {
+  const events = (state.scoreAnalysis.combinedEvents || [])
+    .filter((event) => event.type === "note" || event.type === "rest" || event.type === "bar" || event.type === "line")
+    .map((event) => {
+      if (event.type === "note") {
+        return {
+          type: "note",
+          notes: [...event.notes],
+          duration: event.duration,
+          gate: event.gate,
+          kind: event.kind
+        };
+      }
+      if (event.type === "rest") {
+        return {
+          type: "rest",
+          duration: event.duration,
+          kind: event.kind
+        };
+      }
+      return { type: event.type };
+    });
+
+  if (!events.some((event) => event.type === "note")) {
+    setScoreStatus("No score arrangement to import");
+    return;
+  }
+
+  state.events = events;
+  state.pending = [];
+  renderAll();
+  setStatus("Imported traditional score into Sky sheet");
+}
+
 function downmixAudioBuffer(buffer) {
   const length = buffer.length;
   const channels = buffer.numberOfChannels;
@@ -1484,6 +3963,45 @@ function standardDeviation(values, average = mean(values)) {
 }
 
 function analysisProfileSettings(profile) {
+  if (profile === "translator") {
+    return {
+      label: "Song translator",
+      melodyHopLength: 256,
+      melodyBatchSize: 14,
+      chordProbeRatios: [0.18, 0.34, 0.5, 0.66, 0.82],
+      chordBatchSize: 3,
+      rhythmHopLength: 192,
+      rhythmBatchSize: 48,
+      pianoFrameLength: 4096,
+      pianoHopLength: 640,
+      pianoBatchSize: 4,
+      translatorMaxFrameNotes: 6,
+      translatorLeadSensitivity: 0.19,
+      translatorChordSensitivity: 0.48,
+      neuralMaxFrameNotes: 6,
+      neuralSensitivity: 0.34,
+      selfCorrectPasses: 2
+    };
+  }
+
+  if (profile === "neural") {
+    return {
+      label: "Neural lattice",
+      melodyHopLength: 192,
+      melodyBatchSize: 10,
+      chordProbeRatios: [0.12, 0.25, 0.38, 0.5, 0.62, 0.75, 0.88],
+      chordBatchSize: 2,
+      rhythmHopLength: 160,
+      rhythmBatchSize: 36,
+      pianoFrameLength: 4096,
+      pianoHopLength: 512,
+      pianoBatchSize: 3,
+      neuralMaxFrameNotes: 8,
+      neuralSensitivity: 0.26,
+      selfCorrectPasses: 2
+    };
+  }
+
   if (profile === "beast") {
     return {
       label: "Beast",
@@ -1495,7 +4013,10 @@ function analysisProfileSettings(profile) {
       rhythmBatchSize: 46,
       pianoFrameLength: 4096,
       pianoHopLength: 768,
-      pianoBatchSize: 4
+      pianoBatchSize: 4,
+      neuralMaxFrameNotes: 7,
+      neuralSensitivity: 0.3,
+      selfCorrectPasses: 1
     };
   }
 
@@ -1510,7 +4031,10 @@ function analysisProfileSettings(profile) {
       rhythmBatchSize: 64,
       pianoFrameLength: 2048,
       pianoHopLength: 1024,
-      pianoBatchSize: 6
+      pianoBatchSize: 6,
+      neuralMaxFrameNotes: 5,
+      neuralSensitivity: 0.36,
+      selfCorrectPasses: 1
     };
   }
 
@@ -1524,7 +4048,10 @@ function analysisProfileSettings(profile) {
     rhythmBatchSize: 70,
     pianoFrameLength: 4096,
     pianoHopLength: 1536,
-    pianoBatchSize: 5
+    pianoBatchSize: 5,
+    neuralMaxFrameNotes: 6,
+    neuralSensitivity: 0.33,
+    selfCorrectPasses: 1
   };
 }
 
@@ -1570,6 +4097,82 @@ function feelDensitySettings(density) {
     minRhythmGapBeats: 0.38,
     minEventSeconds: 0.1,
     maxCombinedEvents: 1700
+  };
+}
+
+function playabilitySettings(mode) {
+  if (mode === "simple") {
+    return {
+      label: "Simple 1-key",
+      maxSimultaneous: 1,
+      harmonyButtons: 0,
+      rhythmButtons: 1,
+      melodyHarmonyBoost: 1,
+      minMelodyGapBeats: 0.22,
+      minSupportGapBeats: 0.72,
+      backgroundEveryBeats: 3,
+      rhythmEveryBeats: 1.5,
+      chordPulseBeats: 4,
+      weakAnchorThreshold: 0.6,
+      maxCombinedEvents: 750,
+      targetScore: 0.54,
+      targetCoverage: 0.22
+    };
+  }
+
+  if (mode === "balanced") {
+    return {
+      label: "Balanced 3-key",
+      maxSimultaneous: 3,
+      harmonyButtons: 2,
+      rhythmButtons: 2,
+      melodyHarmonyBoost: 0.06,
+      minMelodyGapBeats: 0.08,
+      minSupportGapBeats: 0.3,
+      backgroundEveryBeats: 1,
+      rhythmEveryBeats: 0.55,
+      chordPulseBeats: 2,
+      weakAnchorThreshold: 0.28,
+      maxCombinedEvents: 1700,
+      targetScore: 0.6,
+      targetCoverage: 0.36
+    };
+  }
+
+  if (mode === "rich") {
+    return {
+      label: "Rich 4-key",
+      maxSimultaneous: 4,
+      harmonyButtons: 3,
+      rhythmButtons: 3,
+      melodyHarmonyBoost: 0,
+      minMelodyGapBeats: 0.04,
+      minSupportGapBeats: 0.16,
+      backgroundEveryBeats: 0.45,
+      rhythmEveryBeats: 0.28,
+      chordPulseBeats: 1.5,
+      weakAnchorThreshold: 0.18,
+      maxCombinedEvents: 2600,
+      targetScore: 0.62,
+      targetCoverage: 0.42
+    };
+  }
+
+  return {
+    label: "Human 2-key",
+    maxSimultaneous: 2,
+    harmonyButtons: 1,
+    rhythmButtons: 1,
+    melodyHarmonyBoost: 0.2,
+    minMelodyGapBeats: 0.14,
+    minSupportGapBeats: 0.46,
+    backgroundEveryBeats: 2,
+    rhythmEveryBeats: 0.9,
+    chordPulseBeats: 3,
+    weakAnchorThreshold: 0.42,
+    maxCombinedEvents: 1150,
+    targetScore: 0.58,
+    targetCoverage: 0.3
   };
 }
 
@@ -2698,6 +5301,571 @@ function smoothSalienceFrames(frames, binCount) {
   });
 }
 
+function salienceChromaForFrame(frame, kernel) {
+  const chroma = Array(12).fill(0);
+  kernel.bins.forEach((bin, index) => {
+    const score = frame.scores[index] || 0;
+    if (score <= 0) return;
+    const registerWeight = bin.midi < 48 ? 0.74 : bin.midi > 82 ? 0.86 : 1;
+    chroma[bin.pc] += Math.pow(score, 1.32) * registerWeight;
+  });
+  return normalizeVector(chroma);
+}
+
+function pickSongFrameCandidates(frame, previousFrame, kernel, options = {}) {
+  if (!frame || frame.rms < 0.0012 || frame.maxScore <= 0.015) return [];
+  const maxCount = Math.max(3, options.translatorMaxFrameNotes || 6);
+  const sensitivity = Math.max(0.1, options.translatorLeadSensitivity || 0.2);
+  const candidates = [];
+
+  kernel.bins.forEach((bin, index) => {
+    const score = frame.scores[index] || 0;
+    if (score < sensitivity) return;
+
+    const previousScore = previousFrame ? previousFrame.scores[index] || 0 : 0;
+    const left = frame.scores[index - 1] || 0;
+    const right = frame.scores[index + 1] || 0;
+    if (score < left * 0.92 || score < right * 0.92) return;
+
+    const lowerOctave = frame.scores[index - 12] || 0;
+    const lowerFifth = frame.scores[index - 7] || 0;
+    const upperOctave = frame.scores[index + 12] || 0;
+    const onset = Math.max(0, score - previousScore * 0.82);
+    const harmonicShadow = Math.max(lowerOctave * 0.48, lowerFifth * 0.2, upperOctave * 0.08);
+    const cleanScore = Math.max(0, score + onset * 0.72 - harmonicShadow * (onset > 0.06 ? 0.22 : 0.38));
+    const leadBias = bin.midi >= 52 ? 1 + Math.min(0.2, (bin.midi - 52) * 0.006) : 0.7;
+    const bassBias = bin.midi <= 58 ? 1 + Math.min(0.28, (58 - bin.midi) * 0.012) : 0.68;
+    const harmonyBias = bin.midi >= 45 && bin.midi <= 78 ? 1 : 0.78;
+    const confidence = Math.max(0.05, Math.min(1, cleanScore * 0.82 + onset * 0.34));
+
+    candidates.push({
+      midi: bin.midi,
+      pc: bin.pc,
+      score,
+      cleanScore,
+      onset,
+      confidence,
+      value: cleanScore + onset * 0.42,
+      leadValue: cleanScore * leadBias + onset * 0.32,
+      bassValue: cleanScore * bassBias + onset * 0.18,
+      harmonyValue: cleanScore * harmonyBias + onset * 0.26
+    });
+  });
+
+  candidates.sort((a, b) => b.value - a.value);
+  const picked = [];
+  candidates.forEach((candidate) => {
+    if (picked.length >= maxCount) return;
+    if (picked.some((item) => Math.abs(item.midi - candidate.midi) <= 1)) return;
+    picked.push(candidate);
+  });
+  return picked.sort((a, b) => a.midi - b.midi);
+}
+
+function buildSongFrequencyCache(frames, kernel, options = {}) {
+  const cachedFrames = [];
+  const globalChroma = Array(12).fill(0);
+  const onsetEnvelope = [];
+
+  frames.forEach((frame, index) => {
+    const previous = frames[index - 1] || null;
+    let spectralFlux = 0;
+    if (previous) {
+      for (let bin = 0; bin < kernel.bins.length; bin += 1) {
+        spectralFlux += Math.max(0, (frame.scores[bin] || 0) - (previous.scores[bin] || 0) * 0.84);
+      }
+      spectralFlux /= Math.max(1, kernel.bins.length);
+    }
+
+    const onset = Math.max(0, frame.rms - (previous ? previous.rms : 0) * 0.84) + spectralFlux * 0.9;
+    const chroma = salienceChromaForFrame(frame, kernel);
+    chroma.forEach((value, pc) => {
+      globalChroma[pc] += value * Math.max(0.02, frame.rms);
+    });
+
+    const candidates = pickSongFrameCandidates(frame, previous, kernel, options);
+    const bass = candidates
+      .filter((candidate) => candidate.midi <= 64)
+      .sort((a, b) => b.bassValue - a.bassValue)[0] || null;
+    const harmony = candidates
+      .filter((candidate) => candidate.midi >= 45 && candidate.midi <= 80)
+      .sort((a, b) => b.harmonyValue - a.harmonyValue)
+      .slice(0, Math.max(2, Math.min(5, options.translatorMaxFrameNotes || 5)));
+
+    cachedFrames.push({
+      time: frame.time,
+      duration: frame.duration,
+      rms: frame.rms,
+      maxScore: frame.maxScore,
+      chroma,
+      onset,
+      candidates,
+      bass,
+      harmony
+    });
+    onsetEnvelope.push(onset);
+  });
+
+  return {
+    frames: cachedFrames,
+    hopSeconds: frames[0] ? frames[0].duration : 0.08,
+    globalChroma: normalizeVector(globalChroma),
+    onsetEnvelope,
+    duration: frames.length ? frames[frames.length - 1].time + frames[frames.length - 1].duration : 0
+  };
+}
+
+function nearestSongFrame(cache, time) {
+  if (!cache || !cache.frames || !cache.frames.length) return null;
+  const index = Math.max(0, Math.min(cache.frames.length - 1, Math.round(time / Math.max(0.001, cache.hopSeconds || 0.08))));
+  return cache.frames[index] || null;
+}
+
+function chooseLeadCandidateFromFrame(frame, previousMidi) {
+  if (!frame || !frame.candidates.length) return null;
+  let best = null;
+  frame.candidates.forEach((candidate) => {
+    if (candidate.midi < 45 || candidate.midi > 88) return;
+    const continuity = previousMidi ? Math.max(0, 1 - Math.abs(candidate.midi - previousMidi) / 14) * 0.28 : 0;
+    const octavePenalty = previousMidi && Math.abs(candidate.midi - previousMidi) > 12 ? 0.2 : 0;
+    const leadRangePenalty = candidate.midi < 52 ? 0.12 : 0;
+    const value = candidate.leadValue + continuity - octavePenalty - leadRangePenalty;
+    if (!best || value > best.value) {
+      best = {
+        ...candidate,
+        value,
+        confidence: Math.max(candidate.confidence, Math.min(1, value * 0.62))
+      };
+    }
+  });
+  return best && best.value >= 0.18 ? best : null;
+}
+
+function buildTranslatorMelodyNotes(cache, duration, tempoEstimate) {
+  const frames = [];
+  let previousMidi = null;
+  cache.frames.forEach((frame) => {
+    const candidate = chooseLeadCandidateFromFrame(frame, previousMidi);
+    if (candidate) previousMidi = candidate.midi;
+    frames.push({
+      time: frame.time,
+      duration: frame.duration,
+      candidate
+    });
+  });
+
+  const beatSeconds = tempoEstimate && tempoEstimate.bpm ? 60 / tempoEstimate.bpm : 60 / Math.max(30, Number(state.bpm) || 96);
+  return markRecurringThemes(contourFramesToNotes(
+    frames,
+    Math.max(0.07, Math.min(0.16, beatSeconds * 0.16)),
+    Math.max(0.1, Math.min(0.22, beatSeconds * 0.22)),
+    "song-lead"
+  ).filter((note) => note.start < duration));
+}
+
+function buildTranslatorChordFrames(cache, duration, windowSeconds, threshold, keyId = state.keyId) {
+  const frames = [];
+  const windowCount = Math.max(1, Math.ceil(duration / windowSeconds));
+  for (let index = 0; index < windowCount; index += 1) {
+    const start = index * windowSeconds;
+    const end = Math.min(duration, start + windowSeconds);
+    const chroma = Array(12).fill(0);
+    let rms = 0;
+    let count = 0;
+    const pitchVotes = new Map();
+
+    cache.frames.forEach((frame) => {
+      if (frame.time < start || frame.time >= end) return;
+      const weight = Math.max(0.02, frame.rms) * (1 + Math.min(0.75, frame.onset * 8));
+      frame.chroma.forEach((value, pc) => {
+        chroma[pc] += value * weight;
+      });
+      frame.harmony.forEach((candidate) => {
+        const key = String(candidate.midi);
+        pitchVotes.set(key, (pitchVotes.get(key) || 0) + candidate.harmonyValue * weight);
+      });
+      rms += frame.rms;
+      count += 1;
+    });
+
+    const averagedRms = count ? rms / count : 0;
+    let chord = detectChord(normalizeVector(chroma), averagedRms, Math.min(threshold, 0.52));
+    const votedMidis = [...pitchVotes.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 7)
+      .map(([midi]) => Number(midi));
+    const pitchChord = detectChordFromMidiPitches(votedMidis, keyId);
+    if (
+      pitchChord.label !== "N.C." &&
+      (chord.label === "N.C." || pitchChord.score > chord.score + 0.08 || votedMidis.length >= 4)
+    ) {
+      chord = pitchChord;
+    }
+
+    frames.push({
+      start,
+      end,
+      label: chord.label,
+      rootPc: chord.rootPc,
+      bassPc: chord.bassPc,
+      template: chord.template,
+      suffix: chord.suffix,
+      intervals: chord.intervals,
+      score: chord.score,
+      source: "song-frequency-cache"
+    });
+  }
+
+  return smoothChordFrames(mergeFrames(frames));
+}
+
+function buildTranslatorRhythmHits(cache, tempoEstimate, density) {
+  const envelope = {
+    envelope: cache.onsetEnvelope,
+    hopSeconds: cache.hopSeconds
+  };
+  return pickRhythmHits(envelope.envelope, envelope.hopSeconds, tempoEstimate, density)
+    .map((hit) => ({ ...hit, source: "song-frequency-cache" }));
+}
+
+function buildTranslatorBackgroundNotes(cache, chordSegments, rhythmHits, duration, tempoEstimate, density) {
+  const settings = feelDensitySettings(density);
+  const beatSeconds = tempoEstimate && tempoEstimate.bpm ? 60 / tempoEstimate.bpm : 60 / Math.max(30, Number(state.bpm) || 96);
+  const minGap = Math.max(0.12, beatSeconds * (density === "full" ? 0.45 : 0.68));
+  const notes = [];
+  let lastTime = -minGap;
+
+  rhythmHits.forEach((hit) => {
+    if (hit.time - lastTime < minGap || hit.time >= duration) return;
+    if (hit.strength < Math.max(0.18, settings.rhythmThreshold * 0.62)) return;
+    const frame = nearestSongFrame(cache, hit.time);
+    const segment = findChordSegmentAtTime(chordSegments, hit.time);
+    const bassCandidate = frame && frame.bass ? frame.bass : null;
+    let midi = bassCandidate ? bassCandidate.midi : null;
+    if ((!midi || (bassCandidate && bassCandidate.confidence < 0.18)) && segment && segment.label !== "N.C.") {
+      midi = 48 + normalizePc(segment.rootPc);
+      while (midi > 58) midi -= 12;
+      while (midi < 40) midi += 12;
+    }
+    if (!midi) return;
+
+    const mapping = chooseSkyButtonForMidi(midi);
+    notes.push({
+      start: hit.time,
+      end: Math.min(duration, hit.time + Math.max(0.12, beatSeconds * 0.55)),
+      buttonId: mapping.buttonId,
+      rawMidi: midi,
+      midi,
+      confidence: Math.max(0.18, Math.min(1, hit.strength * 0.72 + (bassCandidate ? bassCandidate.confidence * 0.28 : 0.12))),
+      onsetStrength: hit.strength,
+      source: "song-accompaniment"
+    });
+    lastTime = hit.time;
+  });
+
+  return markRecurringThemes(mergeNearDuplicateNotes(notes));
+}
+
+function buildNeuralActivationFrames(frames, kernel) {
+  return frames.map((frame, index) => {
+    const previous = frames[index - 1] || frame;
+    const next = frames[index + 1] || frame;
+    const activations = new Array(kernel.bins.length).fill(0);
+    const onsets = new Array(kernel.bins.length).fill(0);
+    let maxActivation = 0;
+
+    kernel.bins.forEach((bin, binIndex) => {
+      if (bin.midi < NEURAL_LATTICE_MIN_MIDI || bin.midi > NEURAL_LATTICE_MAX_MIDI) return;
+
+      const current = frame.scores[binIndex] || 0;
+      const prev = previous.scores[binIndex] || 0;
+      const ahead = next.scores[binIndex] || 0;
+      const left = frame.scores[binIndex - 1] || 0;
+      const right = frame.scores[binIndex + 1] || 0;
+      const lowerOctave = frame.scores[binIndex - 12] || 0;
+      const lowerFifth = frame.scores[binIndex - 7] || 0;
+      const upperOctave = frame.scores[binIndex + 12] || 0;
+      const onset = Math.max(0, current - prev * 0.86);
+      const sustain = current * 0.58 + prev * 0.21 + ahead * 0.21;
+      const pitchPeak = Math.max(0, current - Math.max(left, right) * 0.62);
+      const harmonicShadow = Math.max(lowerOctave * 0.42, lowerFifth * 0.18, upperOctave * 0.08);
+      const onsetProtection = onset > 0.08 ? 0.52 : 1;
+      const registerBias = bin.midi >= 50 ? 1 + Math.min(0.18, (bin.midi - 50) * 0.004) : 0.92;
+      const value = Math.max(0, (sustain * 0.68 + onset * 1.15 + pitchPeak * 0.5 - harmonicShadow * 0.24 * onsetProtection) * registerBias);
+      activations[binIndex] = value;
+      onsets[binIndex] = onset;
+      maxActivation = Math.max(maxActivation, value);
+    });
+
+    if (maxActivation > 0) {
+      for (let binIndex = 0; binIndex < activations.length; binIndex += 1) {
+        activations[binIndex] /= maxActivation;
+        onsets[binIndex] = Math.min(1, onsets[binIndex] / maxActivation);
+      }
+    }
+
+    return {
+      ...frame,
+      activations,
+      onsets,
+      maxActivation: maxActivation > 0 ? 1 : 0
+    };
+  });
+}
+
+function pickNeuralFrameCandidates(frame, kernel, previousMidis, options = {}) {
+  if (!frame || frame.rms < 0.0016 || !frame.maxActivation) return [];
+  const maxCount = Math.max(3, options.neuralMaxFrameNotes || 6);
+  const threshold = Math.max(0.12, options.neuralSensitivity || 0.32);
+  const candidates = [];
+
+  kernel.bins.forEach((bin, index) => {
+    const score = frame.activations[index] || 0;
+    if (score < threshold) return;
+
+    const left = frame.activations[index - 1] || 0;
+    const right = frame.activations[index + 1] || 0;
+    if (score < left * 0.96 || score < right * 0.96) return;
+
+    const continuity = previousMidis && previousMidis.length
+      ? Math.max(...previousMidis.map((midi) => Math.max(0, 1 - Math.abs(midi - bin.midi) / 12))) * 0.16
+      : 0;
+    const topLineBias = Math.max(0, Math.min(0.16, (bin.midi - 56) * 0.006));
+    const bassPenalty = bin.midi < 45 ? 0.06 : 0;
+    const onset = frame.onsets[index] || 0;
+    const value = score + onset * 0.52 + continuity + topLineBias - bassPenalty;
+    candidates.push({
+      midi: bin.midi,
+      score,
+      onset,
+      value,
+      confidence: Math.max(0.08, Math.min(1, score * 0.72 + onset * 0.38))
+    });
+  });
+
+  candidates.sort((a, b) => b.value - a.value);
+  const picked = [];
+  candidates.forEach((candidate) => {
+    if (picked.length >= maxCount) return;
+    if (picked.some((item) => Math.abs(item.midi - candidate.midi) <= 1)) return;
+    picked.push(candidate);
+  });
+  return picked.sort((a, b) => a.midi - b.midi);
+}
+
+function flushNeuralActiveNote(active, notes, minSeconds) {
+  if (!active) return;
+  const duration = active.end - active.start;
+  if (duration < minSeconds || active.weight <= 0) return;
+
+  const midi = active.weightedMidi / active.weight;
+  const confidence = Math.max(0.06, Math.min(1, active.confidence / Math.max(1, active.count)));
+  const mapping = chooseSkyButtonForMidi(midi);
+  notes.push({
+    start: active.start,
+    end: active.end,
+    buttonId: mapping.buttonId,
+    rawMidi: midi,
+    midi,
+    confidence,
+    onsetStrength: active.onsetStrength,
+    source: "neural-lattice",
+    role: "harmony"
+  });
+}
+
+function neuralCandidateFramesToNotes(candidateFrames, duration, tempoEstimate) {
+  const beatSeconds = tempoEstimate && tempoEstimate.bpm ? 60 / tempoEstimate.bpm : 60 / Math.max(30, Number(state.bpm) || 96);
+  const minSeconds = Math.max(0.055, Math.min(0.16, beatSeconds * 0.16));
+  const bridgeGap = Math.max(0.045, Math.min(0.18, beatSeconds * 0.2));
+  const active = new Map();
+  const notes = [];
+
+  candidateFrames.forEach((frame) => {
+    const seen = new Set();
+    frame.candidates.forEach((candidate) => {
+      const key = String(Math.round(candidate.midi));
+      seen.add(key);
+      let current = active.get(key);
+      if (!current || frame.time - current.lastSeen > bridgeGap) {
+        flushNeuralActiveNote(current, notes, minSeconds);
+        current = {
+          start: frame.time,
+          end: frame.time + frame.duration,
+          lastSeen: frame.time,
+          weightedMidi: 0,
+          weight: 0,
+          confidence: 0,
+          onsetStrength: 0,
+          count: 0
+        };
+        active.set(key, current);
+      }
+
+      const weight = Math.max(0.04, candidate.confidence);
+      current.end = Math.max(current.end, frame.time + frame.duration);
+      current.lastSeen = frame.time;
+      current.weightedMidi += candidate.midi * weight;
+      current.weight += weight;
+      current.confidence += candidate.confidence;
+      current.onsetStrength = Math.max(current.onsetStrength, candidate.onset || 0);
+      current.count += 1;
+    });
+
+    active.forEach((current, key) => {
+      if (!seen.has(key) && frame.time - current.lastSeen > bridgeGap) {
+        flushNeuralActiveNote(current, notes, minSeconds);
+        active.delete(key);
+      }
+    });
+  });
+
+  active.forEach((current) => flushNeuralActiveNote(current, notes, minSeconds));
+  return notes
+    .filter((note) => note.start < duration && note.confidence >= 0.1)
+    .sort((a, b) => a.start - b.start || b.midi - a.midi);
+}
+
+function annotateNeuralNoteRoles(notes, tempoEstimate) {
+  const beatSeconds = tempoEstimate && tempoEstimate.bpm ? 60 / tempoEstimate.bpm : 60 / Math.max(30, Number(state.bpm) || 96);
+  const groupWindow = Math.max(0.045, Math.min(0.14, beatSeconds * 0.16));
+  const groups = [];
+
+  notes.forEach((note) => {
+    let group = groups[groups.length - 1];
+    if (!group || note.start - group.time > groupWindow) {
+      group = { time: note.start, notes: [] };
+      groups.push(group);
+    }
+    group.notes.push(note);
+  });
+
+  groups.forEach((group) => {
+    const sortedHigh = [...group.notes].sort((a, b) => b.midi - a.midi || b.confidence - a.confidence);
+    const sortedLow = [...group.notes].sort((a, b) => a.midi - b.midi || b.confidence - a.confidence);
+    const lead = sortedHigh[0];
+    const bass = sortedLow[0];
+    group.notes.forEach((note) => {
+      if (note === lead && note.midi >= 48) {
+        note.role = "foreground";
+        note.source = "neural-foreground";
+        note.confidence = Math.min(1, note.confidence + 0.08);
+      } else if (note === bass || note.midi < 52) {
+        note.role = "background";
+        note.source = "neural-background";
+        note.confidence = Math.min(1, note.confidence + 0.03);
+      } else {
+        note.role = "harmony";
+        note.source = "neural-harmony";
+      }
+    });
+  });
+
+  return notes;
+}
+
+function splitNeuralTracks(notes) {
+  const foregroundNotes = notes
+    .filter((note) => note.role === "foreground" && note.confidence >= 0.14)
+    .map((note) => ({ ...note }));
+  const backgroundNotes = notes
+    .filter((note) => note.role !== "foreground" && note.confidence >= 0.16)
+    .map((note) => ({ ...note }));
+  return {
+    allNotes: markRecurringThemes(mergeNearDuplicateNotes(notes.map((note) => ({ ...note })))),
+    foregroundNotes: markRecurringThemes(mergeNearDuplicateNotes(foregroundNotes)),
+    backgroundNotes: markRecurringThemes(mergeNearDuplicateNotes(backgroundNotes))
+  };
+}
+
+function notesOverlapSeconds(note, start, end) {
+  return Math.max(0, Math.min(note.end, end) - Math.max(note.start, start));
+}
+
+function buildNeuralChordFrames(notes, duration, windowSeconds, keyId) {
+  const frames = [];
+  const windowCount = Math.max(1, Math.ceil(duration / windowSeconds));
+
+  for (let index = 0; index < windowCount; index += 1) {
+    const start = index * windowSeconds;
+    const end = Math.min(duration, start + windowSeconds);
+    const weighted = notes
+      .map((note) => {
+        const overlap = notesOverlapSeconds(note, start, end);
+        const startsInside = note.start >= start && note.start < end;
+        const weight = overlap * Math.max(0.08, note.confidence || 0.2) + (startsInside ? Math.max(0, note.onsetStrength || 0) * 0.16 : 0);
+        return { note, weight };
+      })
+      .filter((item) => item.weight > 0.025)
+      .sort((a, b) => b.weight - a.weight);
+
+    const picked = [];
+    weighted.forEach((item) => {
+      if (picked.length >= 7) return;
+      if (picked.some((existing) => Math.abs(existing.note.midi - item.note.midi) <= 1)) return;
+      picked.push(item);
+    });
+
+    const midis = picked.map((item) => item.note.midi);
+    const chord = detectChordFromMidiPitches(midis, keyId);
+    frames.push({
+      start,
+      end,
+      label: chord.label,
+      rootPc: chord.rootPc,
+      bassPc: chord.bassPc,
+      template: chord.template,
+      suffix: chord.suffix,
+      intervals: chord.intervals,
+      noteCount: midis.length,
+      score: chord.label === "N.C." ? chord.score : Math.max(0, Math.min(1, chord.score + Math.min(0.12, picked.length * 0.018))),
+      source: "neural-lattice"
+    });
+  }
+
+  return frames;
+}
+
+function fuseAudioChordSegments(chromaSegments, neuralFrames, minimumSeconds, duration) {
+  const base = chromaSegments && chromaSegments.length ? chromaSegments : [];
+  const neural = neuralFrames && neuralFrames.length ? neuralFrames : [];
+  if (!base.length) return enforceMinimumChordDuration(mergeFrames(neural), minimumSeconds);
+  if (!neural.length) return enforceMinimumChordDuration(mergeFrames(base), minimumSeconds);
+
+  const fused = base.map((segment) => {
+    const center = (segment.start + segment.end) / 2;
+    const neuralSegment = findChordSegmentAtTime(neural, center);
+    const neuralPlayable = neuralSegment && neuralSegment.label !== "N.C.";
+    const chromaPlayable = segment.label !== "N.C.";
+    const useNeural = neuralPlayable && (
+      !chromaPlayable ||
+      (segment.score < 0.56 && neuralSegment.score >= 0.5) ||
+      (neuralSegment.noteCount >= 3 && neuralSegment.score > (segment.score || 0) + 0.08)
+    );
+
+    if (!useNeural) return { ...segment, source: segment.source || "chroma" };
+    return {
+      ...segment,
+      label: neuralSegment.label,
+      rootPc: neuralSegment.rootPc,
+      bassPc: neuralSegment.bassPc,
+      template: neuralSegment.template,
+      suffix: neuralSegment.suffix,
+      intervals: neuralSegment.intervals,
+      score: Math.max(segment.score || 0, neuralSegment.score || 0),
+      source: "neural-corrected"
+    };
+  });
+
+  neural.forEach((segment) => {
+    if (segment.label === "N.C.") return;
+    const overlaps = fused.some((existing) => notesOverlapSeconds(segment, existing.start, existing.end) > Math.min(0.12, (segment.end - segment.start) * 0.35));
+    if (!overlaps && segment.start < duration) fused.push({ ...segment });
+  });
+
+  return enforceMinimumChordDuration(mergeFrames(smoothChordFrames(fused.sort((a, b) => a.start - b.start))), minimumSeconds);
+}
+
 function pickForegroundCandidate(frame, kernel, previousMidi) {
   if (!frame || frame.rms < 0.002 || frame.maxScore <= 0.02) return null;
   let best = null;
@@ -2886,6 +6054,258 @@ function mergeMelodySources(yinNotes, pianoNotes, duration, tempoEstimate) {
   return markRecurringThemes(mergeNearDuplicateNotes(fused));
 }
 
+function hasNearbyMappedNote(notes, candidate, maxSeconds, requireSameButton = true) {
+  const candidateMapping = melodyMapping(candidate);
+  return notes.some((note) => {
+    const mapping = melodyMapping(note);
+    const sameButton = !requireSameButton || mapping.buttonId === candidateMapping.buttonId;
+    if (!sameButton) return false;
+    const overlap = notesOverlapSeconds(note, candidate.start, candidate.end);
+    const nearStart = Math.abs(note.start - candidate.start) <= maxSeconds;
+    return overlap > 0.015 || nearStart;
+  });
+}
+
+function mergeMelodyWithNeuralForeground(baseNotes, neuralForeground, duration, tempoEstimate, aggressive = false) {
+  const beatSeconds = tempoEstimate && tempoEstimate.bpm ? 60 / tempoEstimate.bpm : 60 / Math.max(30, Number(state.bpm) || 96);
+  const maxSeconds = Math.max(0.08, Math.min(0.24, beatSeconds * (aggressive ? 0.38 : 0.28)));
+  const fused = baseNotes.map((note) => ({ ...note }));
+  const limit = Math.max(80, Math.min(1600, Math.ceil(duration * (aggressive ? 4.2 : 2.2))));
+  let added = 0;
+
+  neuralForeground
+    .filter((note) => note.confidence >= (aggressive ? 0.16 : 0.24))
+    .sort((a, b) => (b.themeStrength || 0) - (a.themeStrength || 0) || b.confidence - a.confidence)
+    .forEach((note) => {
+      if (added >= limit) return;
+      if (hasNearbyMappedNote(fused, note, maxSeconds, true)) return;
+      fused.push({
+        ...note,
+        source: note.source && note.source.includes("recovered") ? note.source : `${note.source || "neural"}+recovered`
+      });
+      added += 1;
+    });
+
+  return {
+    notes: markRecurringThemes(mergeNearDuplicateNotes(fused).filter((note) => note.start < duration)),
+    added
+  };
+}
+
+function mergeBackgroundSources(primary, neuralBackground, duration, tempoEstimate, aggressive = false) {
+  const beatSeconds = tempoEstimate && tempoEstimate.bpm ? 60 / tempoEstimate.bpm : 60 / Math.max(30, Number(state.bpm) || 96);
+  const maxSeconds = Math.max(0.1, Math.min(0.32, beatSeconds * 0.48));
+  const fused = primary.map((note) => ({ ...note }));
+  const limit = Math.max(60, Math.min(1400, Math.ceil(duration * (aggressive ? 3.4 : 1.6))));
+  let added = 0;
+
+  neuralBackground
+    .filter((note) => note.confidence >= (aggressive ? 0.18 : 0.28))
+    .sort((a, b) => b.confidence - a.confidence)
+    .forEach((note) => {
+      if (added >= limit) return;
+      if (hasNearbyMappedNote(fused, note, maxSeconds, false)) return;
+      fused.push({
+        ...note,
+        source: note.source && note.source.includes("recovered") ? note.source : `${note.source || "neural"}+recovered`
+      });
+      added += 1;
+    });
+
+  return {
+    notes: markRecurringThemes(mergeNearDuplicateNotes(fused).filter((note) => note.start < duration)),
+    added
+  };
+}
+
+function deriveRhythmHitsFromNotes(notes, existingHits, tempoEstimate, duration, aggressive = false) {
+  const beatSeconds = tempoEstimate && tempoEstimate.bpm ? 60 / tempoEstimate.bpm : 60 / Math.max(30, Number(state.bpm) || 96);
+  const maxDistance = Math.max(0.06, Math.min(0.22, beatSeconds * 0.28));
+  const minGap = Math.max(0.07, Math.min(0.22, beatSeconds * (aggressive ? 0.18 : 0.28)));
+  const hits = [];
+  let lastTime = -minGap;
+
+  notes
+    .filter((note) => note.start < duration && (note.onsetStrength || note.confidence || 0) >= (aggressive ? 0.16 : 0.26))
+    .sort((a, b) => a.start - b.start || b.confidence - a.confidence)
+    .forEach((note) => {
+      if (note.start - lastTime < minGap) return;
+      const exists = existingHits.some((hit) => Math.abs(hit.time - note.start) <= maxDistance);
+      if (exists) return;
+      const beatIndex = Math.max(0, Math.round(note.start / Math.max(0.001, beatSeconds)));
+      hits.push({
+        time: note.start,
+        strength: Math.max(0.18, Math.min(0.9, (note.confidence || 0.2) * 0.72 + (note.onsetStrength || 0) * 0.28)),
+        score: note.confidence || 0.2,
+        beatIndex,
+        beatLabel: `${Math.floor(beatIndex / COMBINED_BEATS_PER_BAR) + 1}.${(beatIndex % COMBINED_BEATS_PER_BAR) + 1}`,
+        source: "neural-onset"
+      });
+      lastTime = note.start;
+    });
+
+  return hits;
+}
+
+function mergeRhythmSources(existingHits, recoveredHits, tempoEstimate) {
+  const beatSeconds = tempoEstimate && tempoEstimate.bpm ? 60 / tempoEstimate.bpm : 60 / Math.max(30, Number(state.bpm) || 96);
+  const maxDistance = Math.max(0.055, Math.min(0.2, beatSeconds * 0.24));
+  const merged = existingHits.map((hit) => ({ ...hit }));
+  recoveredHits.forEach((hit) => {
+    const existing = merged.find((item) => Math.abs(item.time - hit.time) <= maxDistance);
+    if (existing) {
+      existing.strength = Math.max(existing.strength, hit.strength);
+      existing.score = Math.max(existing.score || 0, hit.score || 0);
+      return;
+    }
+    merged.push({ ...hit });
+  });
+  return merged.sort((a, b) => a.time - b.time);
+}
+
+function addNoteChroma(chroma, midi, weight = 1) {
+  chroma[normalizePc(Math.round(midi))] += Math.max(0, weight);
+}
+
+function buildTimingBins(size = 64) {
+  return Array(size).fill(0);
+}
+
+function normalizeTimingBins(values) {
+  const maxValue = Math.max(...values, 0);
+  if (maxValue <= 0) return values;
+  return values.map((value) => value / maxValue);
+}
+
+function buildInputFeatureSignature(globalChroma, rhythmEnvelope, neuralNotes, duration) {
+  const chroma = normalizeVector(globalChroma && globalChroma.length ? globalChroma : Array(12).fill(0));
+  neuralNotes.forEach((note) => {
+    addNoteChroma(chroma, note.midi, Math.max(0.04, note.confidence || 0.2) * Math.max(0.04, note.end - note.start) * 0.2);
+  });
+
+  const timing = buildTimingBins();
+  if (rhythmEnvelope && Array.isArray(rhythmEnvelope.envelope) && rhythmEnvelope.hopSeconds) {
+    rhythmEnvelope.envelope.forEach((value, index) => {
+      const time = index * rhythmEnvelope.hopSeconds;
+      const bin = Math.max(0, Math.min(timing.length - 1, Math.floor((time / Math.max(0.001, duration)) * timing.length)));
+      timing[bin] += Math.max(0, value);
+    });
+  }
+
+  neuralNotes.forEach((note) => {
+    const bin = Math.max(0, Math.min(timing.length - 1, Math.floor((note.start / Math.max(0.001, duration)) * timing.length)));
+    timing[bin] += Math.max(0.05, note.confidence || 0.2) * 0.35;
+  });
+
+  return {
+    chroma: normalizeVector(chroma),
+    timing: normalizeTimingBins(timing),
+    noteOnsetCount: neuralNotes.length,
+    duration
+  };
+}
+
+function buildSkyOutputFeatureSignature(events, keyId, duration) {
+  const chroma = Array(12).fill(0);
+  const timing = buildTimingBins();
+  let noteEventCount = 0;
+
+  events.forEach((event) => {
+    if (event.type !== "note") return;
+    noteEventCount += 1;
+    const eventTime = Number.isFinite(event.time) ? event.time : 0;
+    const bin = Math.max(0, Math.min(timing.length - 1, Math.floor((eventTime / Math.max(0.001, duration)) * timing.length)));
+    timing[bin] += Math.max(0.08, event.strength || 0.4);
+    event.notes.forEach((buttonId) => {
+      const midi = skyMidiForButton(buttonId, keyId);
+      addNoteChroma(chroma, midi, Math.max(0.1, event.duration || 0.25) * Math.max(0.2, event.strength || 0.4));
+    });
+  });
+
+  return {
+    chroma: normalizeVector(chroma),
+    timing: normalizeTimingBins(timing),
+    noteEventCount
+  };
+}
+
+function compareAudioToSkyOutput(inputSignature, events, keyId, duration) {
+  const output = buildSkyOutputFeatureSignature(events, keyId, duration || inputSignature.duration || 1);
+  const chromaSimilarity = cosineSimilarity(inputSignature.chroma || [], output.chroma || []);
+  const timingSimilarity = cosineSimilarity(inputSignature.timing || [], output.timing || []);
+  const expectedCount = Math.max(1, inputSignature.noteOnsetCount || 1);
+  const noteCoverage = Math.max(0, Math.min(1, output.noteEventCount / expectedCount));
+  const score = Math.max(0, Math.min(1, chromaSimilarity * 0.44 + timingSimilarity * 0.34 + noteCoverage * 0.22));
+  return {
+    score,
+    chromaSimilarity,
+    timingSimilarity,
+    noteCoverage,
+    noteEventCount: output.noteEventCount,
+    expectedCount
+  };
+}
+
+function applyAudioSelfCorrection(analysis, neuralTracks, inputSignature, settings, density) {
+  const summary = {
+    passes: 0,
+    melodyAdded: 0,
+    backgroundAdded: 0,
+    rhythmAdded: 0,
+    reason: "stable"
+  };
+  const playability = analysis.playability || (els.playabilitySelect ? els.playabilitySelect.value : "human");
+  const target = playabilitySettings(playability);
+
+  for (let pass = 0; pass < Math.max(1, settings.selfCorrectPasses || 1); pass += 1) {
+    rebuildCombinedAnalysis();
+    const quality = compareAudioToSkyOutput(inputSignature, analysis.combinedEvents || [], state.keyId, analysis.duration);
+    analysis.quality = quality;
+    if (quality.score >= target.targetScore && quality.noteCoverage >= target.targetCoverage) break;
+
+    const aggressive = pass > 0 || quality.score < target.targetScore - 0.12 || quality.noteCoverage < target.targetCoverage - 0.12;
+    const melodyMerge = mergeMelodyWithNeuralForeground(
+      analysis.melodyNotes || [],
+      neuralTracks.foregroundNotes || [],
+      analysis.duration,
+      analysis.tempoEstimate,
+      aggressive
+    );
+    const backgroundMerge = mergeBackgroundSources(
+      analysis.backgroundNotes || [],
+      neuralTracks.backgroundNotes || [],
+      analysis.duration,
+      analysis.tempoEstimate,
+      aggressive
+    );
+    const recoveredHits = deriveRhythmHitsFromNotes(
+      neuralTracks.allNotes || [],
+      analysis.rhythmHits || [],
+      analysis.tempoEstimate,
+      analysis.duration,
+      aggressive
+    );
+
+    if (!melodyMerge.added && !backgroundMerge.added && !recoveredHits.length) {
+      summary.reason = "no-more-candidates";
+      break;
+    }
+
+    analysis.melodyNotes = melodyMerge.notes;
+    analysis.backgroundNotes = backgroundMerge.notes;
+    analysis.rhythmHits = mergeRhythmSources(analysis.rhythmHits || [], recoveredHits, analysis.tempoEstimate);
+    summary.passes += 1;
+    summary.melodyAdded += melodyMerge.added;
+    summary.backgroundAdded += backgroundMerge.added;
+    summary.rhythmAdded += recoveredHits.length;
+    summary.reason = aggressive ? "aggressive-recovery" : "coverage-recovery";
+  }
+
+  rebuildCombinedAnalysis();
+  analysis.quality = compareAudioToSkyOutput(inputSignature, analysis.combinedEvents || [], state.keyId, analysis.duration);
+  analysis.correctionSummary = summary;
+}
+
 function buildBackgroundTrackFromFrames(frames, kernel, beatSeconds) {
   const notes = [];
   const minGap = Math.max(0.12, beatSeconds * 0.5);
@@ -2942,6 +6362,40 @@ function buildPianoCoverTracks(samples, sampleRate, duration, tempoEstimate, opt
         window.requestAnimationFrame(processBatch);
       } else {
         const smoothed = smoothSalienceFrames(frames, kernel.bins.length);
+        const songCache = buildSongFrequencyCache(smoothed, kernel, options);
+        const translatorMelodyNotes = buildTranslatorMelodyNotes(songCache, duration, tempoEstimate);
+        const translatorChordFrames = buildTranslatorChordFrames(
+          songCache,
+          duration,
+          options.windowSeconds || 1,
+          options.translatorChordSensitivity || 0.5,
+          state.keyId
+        );
+        const translatorRhythmHits = buildTranslatorRhythmHits(songCache, tempoEstimate, options.density || "balanced");
+        const translatorBackgroundNotes = buildTranslatorBackgroundNotes(
+          songCache,
+          translatorChordFrames,
+          translatorRhythmHits,
+          duration,
+          tempoEstimate,
+          options.density || "balanced"
+        );
+        const activationFrames = buildNeuralActivationFrames(smoothed, kernel);
+        let previousMidis = [];
+        const candidateFrames = activationFrames.map((frame) => {
+          const candidates = pickNeuralFrameCandidates(frame, kernel, previousMidis, options);
+          if (candidates.length) previousMidis = candidates.map((candidate) => candidate.midi);
+          return {
+            time: frame.time,
+            duration: frame.duration,
+            candidates
+          };
+        });
+        const neuralNotes = annotateNeuralNoteRoles(
+          neuralCandidateFramesToNotes(candidateFrames, duration, tempoEstimate),
+          tempoEstimate
+        );
+        const neuralTracks = splitNeuralTracks(neuralNotes);
         let previousMidi = null;
         const contourFrames = smoothed.map((frame) => {
           const foreground = pickForegroundCandidate(frame, kernel, previousMidi);
@@ -2964,6 +6418,19 @@ function buildPianoCoverTracks(samples, sampleRate, duration, tempoEstimate, opt
         resolve({
           foregroundNotes,
           backgroundNotes,
+          translatorMelodyNotes,
+          translatorChordFrames,
+          translatorRhythmHits,
+          translatorBackgroundNotes,
+          songCacheSummary: {
+            frameCount: songCache.frames.length,
+            hopSeconds: songCache.hopSeconds,
+            globalChroma: songCache.globalChroma
+          },
+          neuralNotes: neuralTracks.allNotes,
+          neuralForegroundNotes: neuralTracks.foregroundNotes,
+          neuralBackgroundNotes: neuralTracks.backgroundNotes,
+          neuralChordFrames: buildNeuralChordFrames(neuralTracks.allNotes, duration, options.windowSeconds || 1, state.keyId),
           frameCount
         });
       }
@@ -2991,6 +6458,7 @@ async function analyzeAudioFile() {
   try {
     const profile = els.analysisProfileSelect.value || "long";
     const density = els.feelDensitySelect.value || "balanced";
+    const playability = els.playabilitySelect ? els.playabilitySelect.value : "human";
     const settings = analysisProfileSettings(profile);
     const ctx = getAudioContext();
     const buffer = await ctx.decodeAudioData(await file.arrayBuffer());
@@ -3030,14 +6498,54 @@ async function analyzeAudioFile() {
       setAudioStatus(`${settings.label}: extracting rhythm ${Math.round((done / total) * 100)}%`);
     });
 
-    const pianoTracks = await buildPianoCoverTracks(samples, targetRate, buffer.duration, tempoEstimate, settings, (done, total) => {
-      setAudioStatus(`${settings.label}: separating piano foreground ${Math.round((done / total) * 100)}%`);
+    const pianoTracks = await buildPianoCoverTracks(samples, targetRate, buffer.duration, tempoEstimate, {
+      ...settings,
+      windowSeconds,
+      density
+    }, (done, total) => {
+      setAudioStatus(`${settings.label}: caching song frequencies ${Math.round((done / total) * 100)}%`);
     });
 
     const smoothed = smoothChordFrames(analysis.frames);
-    const merged = enforceMinimumChordDuration(mergeFrames(smoothed), minimumSeconds);
-    const mergedMelody = mergeMelodySources(melody.notes, pianoTracks.foregroundNotes, buffer.duration, tempoEstimate);
-    const combinedChroma = addChroma(analysis.globalChroma, melodyChromaFromNotes(mergedMelody), 1.4);
+    const chromaMerged = enforceMinimumChordDuration(mergeFrames(smoothed), minimumSeconds);
+    let merged = fuseAudioChordSegments(chromaMerged, pianoTracks.translatorChordFrames, minimumSeconds, buffer.duration);
+    if (profile === "neural") {
+      merged = fuseAudioChordSegments(merged, pianoTracks.neuralChordFrames, minimumSeconds, buffer.duration);
+    }
+
+    const translatorLead = mergeMelodySources(melody.notes, pianoTracks.translatorMelodyNotes || [], buffer.duration, tempoEstimate);
+    const baseMelody = mergeMelodySources(translatorLead, pianoTracks.foregroundNotes, buffer.duration, tempoEstimate);
+    const neuralMelody = profile === "neural"
+      ? mergeMelodyWithNeuralForeground(baseMelody, pianoTracks.neuralForegroundNotes || [], buffer.duration, tempoEstimate, false)
+      : { notes: baseMelody, added: 0 };
+    const mergedMelody = neuralMelody.notes;
+    const foregroundNotes = markRecurringThemes(mergeNearDuplicateNotes([
+      ...(pianoTracks.translatorMelodyNotes || []),
+      ...pianoTracks.foregroundNotes,
+      ...(profile === "neural" ? pianoTracks.neuralForegroundNotes || [] : [])
+    ]));
+    const translatedRhythmHits = mergeRhythmSources(rhythm.hits, pianoTracks.translatorRhythmHits || [], tempoEstimate);
+    const baseBackgroundNotes = markRecurringThemes(mergeNearDuplicateNotes([
+      ...(pianoTracks.translatorBackgroundNotes || []),
+      ...pianoTracks.backgroundNotes
+    ]));
+    const backgroundMerge = mergeBackgroundSources(
+      baseBackgroundNotes,
+      profile === "neural" ? pianoTracks.neuralBackgroundNotes || [] : [],
+      buffer.duration,
+      tempoEstimate,
+      false
+    );
+    const translatorChroma = pianoTracks.songCacheSummary && pianoTracks.songCacheSummary.globalChroma
+      ? pianoTracks.songCacheSummary.globalChroma
+      : Array(12).fill(0);
+    const combinedChroma = addChroma(addChroma(analysis.globalChroma, translatorChroma, 1.15), melodyChromaFromNotes(mergedMelody), 1.4);
+    const recoveryAllNotes = markRecurringThemes(mergeNearDuplicateNotes([
+      ...(pianoTracks.translatorMelodyNotes || []),
+      ...(pianoTracks.translatorBackgroundNotes || []),
+      ...(profile === "neural" ? pianoTracks.neuralNotes || [] : [])
+    ]));
+    const inputSignature = buildInputFeatureSignature(combinedChroma, rhythm.envelope, recoveryAllNotes, buffer.duration);
     state.chordAnalysis = {
       fileName: file.name,
       duration: buffer.duration,
@@ -3045,25 +6553,39 @@ async function analyzeAudioFile() {
       segments: merged,
       refinedText: "",
       melodyNotes: mergedMelody,
-      foregroundNotes: pianoTracks.foregroundNotes,
-      backgroundNotes: pianoTracks.backgroundNotes,
-      rhythmHits: rhythm.hits,
+      foregroundNotes,
+      backgroundNotes: backgroundMerge.notes,
+      neuralNotes: recoveryAllNotes,
+      rhythmHits: translatedRhythmHits,
       combinedEvents: [],
       tempoEstimate,
       tuning: null,
       analysisProfile: profile,
       feelDensity: density,
+      playability,
       enhancerMode: els.enhancerSelect.value || "threePhase",
       enhancementSummary: null,
+      quality: null,
+      correctionSummary: null,
+      inputSignature,
       wordingAssignments: []
     };
-    rebuildCombinedAnalysis();
+    applyAudioSelfCorrection(state.chordAnalysis, {
+      allNotes: recoveryAllNotes,
+      foregroundNotes: pianoTracks.translatorMelodyNotes || [],
+      backgroundNotes: pianoTracks.translatorBackgroundNotes || []
+    }, inputSignature, settings, density);
     renderChordAnalysis();
     const tempoText = tempoEstimate ? `, ${tempoEstimate.bpm} BPM` : "";
     const flow = state.chordAnalysis.enhancementSummary;
     const flowText = flow && flow.label !== "Off" ? `, ${flow.label} timing` : "";
-    const fallbackText = pianoTracks.foregroundNotes.length > melody.notes.length ? ", piano foreground fallback" : "";
-    setAudioStatus(`${file.name} analyzed: ${mergedMelody.length} melody notes, ${pianoTracks.backgroundNotes.length} background notes, ${rhythm.hits.length} rhythm hits, ${merged.length} chord segments${tempoText}${flowText}${fallbackText}`);
+    const qualityText = state.chordAnalysis.quality ? `, match ${Math.round(state.chordAnalysis.quality.score * 100)}%` : "";
+    const correction = state.chordAnalysis.correctionSummary;
+    const recovered = correction ? correction.melodyAdded + correction.backgroundAdded + correction.rhythmAdded : 0;
+    const cacheText = pianoTracks.songCacheSummary ? `, ${pianoTracks.songCacheSummary.frameCount} cached frames` : "";
+    const fallbackText = (pianoTracks.translatorMelodyNotes || []).length > melody.notes.length ? ", song-lead translation" : "";
+    const playabilityText = `, ${playabilitySettings(playability).label}`;
+    setAudioStatus(`${file.name} analyzed: ${state.chordAnalysis.melodyNotes.length} melody notes, ${state.chordAnalysis.backgroundNotes.length} accompaniment notes, ${state.chordAnalysis.rhythmHits.length} rhythm hits, ${state.chordAnalysis.segments.length} chord segments${tempoText}${flowText}${playabilityText}${qualityText}${recovered ? `, ${recovered} self-corrections` : ""}${cacheText}${fallbackText}`);
   } catch (error) {
     state.chordAnalysis = {
       fileName: "",
@@ -3074,14 +6596,19 @@ async function analyzeAudioFile() {
       melodyNotes: [],
       foregroundNotes: [],
       backgroundNotes: [],
+      neuralNotes: [],
       rhythmHits: [],
       combinedEvents: [],
       tempoEstimate: null,
       tuning: null,
       analysisProfile: els.analysisProfileSelect.value || "long",
       feelDensity: els.feelDensitySelect.value || "balanced",
+      playability: els.playabilitySelect ? els.playabilitySelect.value : "human",
       enhancerMode: els.enhancerSelect.value || "threePhase",
       enhancementSummary: null,
+      quality: null,
+      correctionSummary: null,
+      inputSignature: null,
       wordingAssignments: []
     };
     renderChordAnalysis();
@@ -3348,6 +6875,9 @@ async function refineChordsWithMimo() {
     .filter((event) => event.type !== "bar" && event.type !== "line")
     .slice(0, 500)
     .map((event) => `${Number.isFinite(event.time) ? formatTime(event.time) : "-"} | ${eventLabel(event)} | ${event.kind || event.type} | ${event.duration || 0}b`);
+  const playability = els.playabilitySelect ? els.playabilitySelect.value : state.chordAnalysis.playability || "human";
+  const noteEvents = (state.chordAnalysis.combinedEvents || []).filter((event) => event.type === "note");
+  const maxKeysSeen = noteEvents.reduce((max, event) => Math.max(max, Array.isArray(event.notes) ? event.notes.length : 0), 0);
 
   els.refineChordsBtn.disabled = true;
   setAudioStatus("Refining with MiMo");
@@ -3361,6 +6891,13 @@ async function refineChordsWithMimo() {
         selectedSkyKey: currentConfig().label,
         detectedKey: state.chordAnalysis.keyGuess ? state.chordAnalysis.keyGuess.label : "",
         duration: state.chordAnalysis.duration,
+        playability,
+        playabilityLabel: playabilitySettings(playability).label,
+        combinedStats: {
+          noteEvents: noteEvents.length,
+          maxKeysSeen,
+          feelDensity: state.chordAnalysis.feelDensity || "balanced"
+        },
         chordLines,
         melodyLines,
         rhythmLines,
@@ -3512,7 +7049,7 @@ function skySampleCacheKey(ctx, frequency) {
 }
 
 function createSkyPianoSample(ctx, frequency) {
-  const seconds = frequency > 1200 ? 1.15 : frequency > 700 ? 1.42 : 1.68;
+  const seconds = frequency > 1200 ? 2.05 : frequency > 700 ? 2.45 : 2.85;
   const length = Math.max(1, Math.floor(ctx.sampleRate * seconds));
   const buffer = ctx.createBuffer(2, length, ctx.sampleRate);
   const attackSeconds = 0.0045;
@@ -3563,19 +7100,31 @@ function playTone(frequency, startTime, duration, options = {}) {
   const output = getAudioGraph().input;
   const sample = getSkyPianoSample(ctx, frequency);
   const level = Math.max(0.18, Math.min(1, options.level || 1));
+  const noteSeconds = Math.max(0.04, Number(duration) || 0.16);
+  const safeStart = Math.max(ctx.currentTime + 0.004, startTime);
+  const attackEnd = safeStart + 0.006;
+  const holdEnd = safeStart + Math.max(0.018, noteSeconds);
+  const releaseSeconds = Math.max(0.035, Math.min(0.18, noteSeconds * 0.42));
+  const stopTime = Math.min(safeStart + sample.duration, holdEnd + releaseSeconds + 0.06);
+  const peakGain = 0.86 * level;
 
   source.buffer = sample;
   tone.type = "lowpass";
-  tone.frequency.setValueAtTime(frequency > 900 ? 4300 : 3900, startTime);
-  tone.Q.setValueAtTime(0.18, startTime);
+  tone.frequency.setValueAtTime(frequency > 900 ? 4300 : 3900, safeStart);
+  tone.Q.setValueAtTime(0.18, safeStart);
 
-  gain.gain.setValueAtTime(0.0001, startTime);
-  gain.gain.exponentialRampToValueAtTime(0.86 * level, startTime + 0.006);
-  gain.gain.setValueAtTime(0.86 * level, startTime + 0.02);
+  gain.gain.cancelScheduledValues(safeStart);
+  gain.gain.setValueAtTime(0.0001, safeStart);
+  gain.gain.exponentialRampToValueAtTime(peakGain, attackEnd);
+  gain.gain.setValueAtTime(peakGain, Math.min(holdEnd, safeStart + sample.duration - 0.03));
+  gain.gain.exponentialRampToValueAtTime(0.0001, Math.min(stopTime, holdEnd + releaseSeconds));
   source.connect(tone).connect(gain).connect(output);
-  source.start(startTime);
-  source.stop(startTime + sample.duration + 0.02);
+  source.start(safeStart);
+  source.stop(stopTime);
   activeOscillators.push(source);
+  source.onended = () => {
+    activeOscillators = activeOscillators.filter((item) => item !== source);
+  };
 }
 
 function playbackGateForEvent(event, eventSeconds) {
@@ -3594,6 +7143,11 @@ function playButton(id) {
 }
 
 function stopPlayback() {
+  playbackSessionId += 1;
+  if (playbackScheduler) {
+    window.clearInterval(playbackScheduler);
+    playbackScheduler = null;
+  }
   scheduledTimers.forEach((timer) => window.clearTimeout(timer));
   scheduledTimers = [];
   activeOscillators.forEach((oscillator) => {
@@ -3607,44 +7161,128 @@ function stopPlayback() {
   renderTimeline();
 }
 
-function playSheet() {
+function buildPlaybackItems(events, beatSeconds) {
+  const items = [];
+  let cursor = 0;
+
+  events.forEach((event, index) => {
+    if (event.type === "note") {
+      const durationBeats = Math.max(0.03125, Number(event.duration) || 0.25);
+      const durationSeconds = beatSeconds * durationBeats;
+      items.push({
+        event,
+        index,
+        time: cursor,
+        durationSeconds
+      });
+      cursor += durationSeconds;
+      return;
+    }
+
+    if (event.type === "rest") {
+      const durationBeats = Math.max(0.03125, Number(event.duration) || 0.25);
+      const durationSeconds = beatSeconds * durationBeats;
+      items.push({
+        event,
+        index,
+        time: cursor,
+        durationSeconds
+      });
+      cursor += durationSeconds;
+      return;
+    }
+
+    if (event.type === "bar" || event.type === "line") {
+      items.push({
+        event,
+        index,
+        time: cursor,
+        durationSeconds: 0
+      });
+    }
+  });
+
+  return {
+    items,
+    totalSeconds: cursor
+  };
+}
+
+function schedulePlaybackVisual(callback, eventTime, ctx) {
+  const delay = Math.max(0, (eventTime - ctx.currentTime) * 1000);
+  scheduledTimers.push(window.setTimeout(callback, delay));
+}
+
+async function playSheet() {
   stopPlayback();
   if (!state.events.length) return;
 
   const ctx = getAudioContext();
-  const beatSeconds = 60 / Math.max(30, Number(state.bpm) || 96);
-  let cursor = ctx.currentTime + 0.08;
-  let visualDelay = 80;
+  if (ctx.state === "suspended") {
+    await ctx.resume();
+  }
 
-  state.events.forEach((event, index) => {
+  const beatSeconds = 60 / Math.max(30, Number(state.bpm) || 96);
+  const playback = buildPlaybackItems(state.events, beatSeconds);
+  if (!playback.items.length) return;
+
+  const sessionId = playbackSessionId;
+  const startTime = ctx.currentTime + 0.08;
+  const lookaheadSeconds = 1.35;
+  let nextIndex = 0;
+  let finished = false;
+
+  function scheduleItem(item) {
+    const event = item.event;
+    const eventTime = startTime + item.time;
     if (event.type === "note") {
-      const eventSeconds = beatSeconds * event.duration;
+      const eventSeconds = item.durationSeconds;
       const gate = playbackGateForEvent(event, eventSeconds);
       const toneSeconds = Math.max(0.045, eventSeconds * gate);
       const noteCount = Math.max(1, event.notes.length);
       const chordLevel = Math.min(0.92, 1 / Math.pow(noteCount, 0.45));
       event.notes.forEach((id) => {
-        playTone(frequencyForButton(id), cursor, toneSeconds, {
+        playTone(frequencyForButton(id), eventTime, toneSeconds, {
           level: chordLevel
         });
-        scheduledTimers.push(window.setTimeout(() => flashPianoKey(id, Math.min(190, Math.max(90, eventSeconds * 240))), visualDelay));
+        schedulePlaybackVisual(() => {
+          flashPianoKey(id, Math.min(190, Math.max(90, eventSeconds * 240)));
+        }, eventTime, ctx);
       });
-      scheduledTimers.push(window.setTimeout(() => renderTimeline(index), visualDelay));
-      visualDelay += eventSeconds * 1000;
-      cursor += eventSeconds;
-    } else if (event.type === "rest") {
-      scheduledTimers.push(window.setTimeout(() => renderTimeline(index), visualDelay));
-      visualDelay += beatSeconds * event.duration * 1000;
-      cursor += beatSeconds * event.duration;
-    } else if (event.type === "bar" || event.type === "line") {
-      scheduledTimers.push(window.setTimeout(() => renderTimeline(index), visualDelay));
+      schedulePlaybackVisual(() => renderTimeline(item.index), eventTime, ctx);
+      return;
     }
-  });
 
-  scheduledTimers.push(window.setTimeout(() => {
-    renderTimeline();
-    setStatus("Playback finished");
-  }, visualDelay + 80));
+    schedulePlaybackVisual(() => renderTimeline(item.index), eventTime, ctx);
+  }
+
+  function scheduleDueItems() {
+    if (playbackSessionId !== sessionId) return;
+    const now = ctx.currentTime;
+    while (
+      nextIndex < playback.items.length &&
+      startTime + playback.items[nextIndex].time <= now + lookaheadSeconds
+    ) {
+      scheduleItem(playback.items[nextIndex]);
+      nextIndex += 1;
+    }
+
+    if (!finished && nextIndex >= playback.items.length && now >= startTime + playback.totalSeconds + 0.28) {
+      finished = true;
+      if (playbackScheduler) {
+        window.clearInterval(playbackScheduler);
+        playbackScheduler = null;
+      }
+      scheduledTimers.push(window.setTimeout(() => {
+        if (playbackSessionId !== sessionId) return;
+        renderTimeline();
+        setStatus("Playback finished");
+      }, 180));
+    }
+  }
+
+  scheduleDueItems();
+  playbackScheduler = window.setInterval(scheduleDueItems, 80);
   setStatus("Playing sheet");
 }
 
@@ -3717,6 +7355,7 @@ function syncControls() {
   els.durationSelect.value = String(state.duration);
   els.bpmInput.value = String(state.bpm);
   if (els.enhancerSelect) els.enhancerSelect.value = state.chordAnalysis.enhancerMode || "threePhase";
+  if (els.playabilitySelect) els.playabilitySelect.value = state.chordAnalysis.playability || "human";
 }
 
 function bindEvents() {
@@ -3778,7 +7417,13 @@ function bindEvents() {
     const file = els.audioFileInput.files && els.audioFileInput.files[0];
     setAudioStatus(file ? `${file.name} ready` : "No MP3 loaded");
   });
+  els.scoreFileInput.addEventListener("change", () => {
+    const file = els.scoreFileInput.files && els.scoreFileInput.files[0];
+    setScoreStatus(file ? `${file.name} ready` : "No score loaded");
+  });
   els.analyzeAudioBtn.addEventListener("click", analyzeAudioFile);
+  els.analyzeScoreBtn.addEventListener("click", analyzeScoreFile);
+  els.importScoreBtn.addEventListener("click", importScoreArrangement);
   els.autoTuneBtn.addEventListener("click", autoTuneMelody);
   els.refineChordsBtn.addEventListener("click", refineChordsWithMimo);
   els.importCombinedBtn.addEventListener("click", importCombinedArrangement);
@@ -3816,6 +7461,14 @@ function bindEvents() {
       setAudioStatus(`Combined feel rebuilt in ${feelDensitySettings(els.feelDensitySelect.value).label} mode`);
     }
   });
+  els.playabilitySelect.addEventListener("change", () => {
+    state.chordAnalysis.playability = els.playabilitySelect.value;
+    if (state.chordAnalysis.melodyNotes.length || state.chordAnalysis.rhythmHits.length) {
+      rebuildCombinedAnalysis();
+      renderChordAnalysis();
+      setAudioStatus(`Combined sheet rebuilt for ${playabilitySettings(els.playabilitySelect.value).label}`);
+    }
+  });
   els.enhancerSelect.addEventListener("change", () => {
     state.chordAnalysis.enhancerMode = els.enhancerSelect.value;
     if (state.chordAnalysis.melodyNotes.length || state.chordAnalysis.rhythmHits.length) {
@@ -3825,6 +7478,23 @@ function bindEvents() {
       const detail = summary && summary.gridStep ? `, ${summary.gridStep} beat grid` : "";
       setAudioStatus(`${flowEnhancerSettings(els.enhancerSelect.value).label} timing enhancer applied${detail}`);
     }
+    if (state.scoreAnalysis.scoreData) {
+      applyScoreConversion({ name: state.scoreAnalysis.fileName || "Score" }, {
+        scoreData: state.scoreAnalysis.scoreData,
+        sourceType: state.scoreAnalysis.sourceType,
+        omrModel: state.scoreAnalysis.omrModel
+      });
+    }
+  });
+  [els.scoreKeyStrategySelect, els.scoreArrangementSelect, els.scoreMaxKeysSelect].forEach((control) => {
+    control.addEventListener("change", () => {
+      if (!state.scoreAnalysis.scoreData) return;
+      applyScoreConversion({ name: state.scoreAnalysis.fileName || "Score" }, {
+        scoreData: state.scoreAnalysis.scoreData,
+        sourceType: state.scoreAnalysis.sourceType,
+        omrModel: state.scoreAnalysis.omrModel
+      });
+    });
   });
   els.titleInput.addEventListener("input", renderExport);
   els.authorInput.addEventListener("input", renderExport);
