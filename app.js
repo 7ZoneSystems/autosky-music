@@ -263,6 +263,7 @@ const AUTO_CONFIG_TARGET_SCORE = 0.82;
 const LIVE_STUDIO_CHORD_WINDOW_SECONDS = 0.16;
 const LIVE_STUDIO_GRID_STEP = 0.0625;
 const LIVE_STUDIO_MIN_NOTE_BEATS = 0.125;
+const LIVE_STUDIO_MAX_STEP_BEATS = 8;
 const TWO_PI = Math.PI * 2;
 const KEY_ALIASES = new Map();
 KEY_CONFIGS.forEach((config) => {
@@ -367,9 +368,9 @@ const state = {
   liveStudio: {
     open: false,
     recording: false,
-    chordMode: false,
     startedAt: 0,
     elapsedSeconds: 0,
+    autoStep: 1,
     groups: [],
     timer: null
   }
@@ -570,8 +571,6 @@ const els = {
   liveStudioStopBtn: document.querySelector("#liveStudioStopBtn"),
   liveStudioTimer: document.querySelector("#liveStudioTimer"),
   liveStudioCount: document.querySelector("#liveStudioCount"),
-  liveStudioSingleBtn: document.querySelector("#liveStudioSingleBtn"),
-  liveStudioChordBtn: document.querySelector("#liveStudioChordBtn"),
   liveStudioHint: document.querySelector("#liveStudioHint"),
   liveStudioGrid: document.querySelector("#liveStudioGrid")
 };
@@ -1844,16 +1843,12 @@ function renderLiveStudio() {
   }
   if (els.liveStudioStartBtn) els.liveStudioStartBtn.disabled = state.liveStudio.recording || !ready;
   if (els.liveStudioStopBtn) els.liveStudioStopBtn.disabled = !state.liveStudio.recording;
-  if (els.liveStudioSingleBtn) els.liveStudioSingleBtn.classList.toggle("active", !state.liveStudio.chordMode);
-  if (els.liveStudioChordBtn) els.liveStudioChordBtn.classList.toggle("active", state.liveStudio.chordMode);
   if (els.liveStudioHint) {
     els.liveStudioHint.textContent = !ready
       ? "Rotate to landscape, then press Start."
       : state.liveStudio.recording
-        ? state.liveStudio.chordMode
-          ? "Recording. Fast taps within the chord window become one Sky chord box."
-          : "Recording. Every key press becomes a timed Sky sheet box."
-        : "Press Start, then play the Sky keys. Stop converts your live timing into sheet boxes.";
+        ? "Recording. Step length is being estimated from your spacing while different-key hits auto-group into chords."
+        : "Press Start, then play naturally. Step, rests, and fast different-key chords are detected automatically.";
   }
   if (state.liveStudio.open) renderLiveStudioGrid();
   renderLiveStudioReadout();
@@ -1865,8 +1860,8 @@ function openLiveStudio() {
   closeMobileCreatorPad();
   state.liveStudio.open = true;
   state.liveStudio.recording = false;
-  state.liveStudio.chordMode = state.chordMode;
   state.liveStudio.elapsedSeconds = 0;
+  state.liveStudio.autoStep = 1;
   state.liveStudio.groups = [];
   clearLiveStudioTimer();
   renderLiveStudio();
@@ -1902,6 +1897,7 @@ async function startLiveStudio() {
   state.liveStudio.recording = true;
   state.liveStudio.startedAt = performance.now();
   state.liveStudio.elapsedSeconds = 0;
+  state.liveStudio.autoStep = 1;
   state.liveStudio.groups = [];
   clearLiveStudioTimer();
   state.liveStudio.timer = window.setInterval(renderLiveStudioReadout, 100);
@@ -1911,7 +1907,27 @@ async function startLiveStudio() {
 
 function quantizeLiveStudioBeats(beats, minimum = 0) {
   const rounded = Math.round((Number(beats) || 0) / LIVE_STUDIO_GRID_STEP) * LIVE_STUDIO_GRID_STEP;
-  return Number(Math.max(minimum, rounded).toFixed(4));
+  return Number(Math.min(LIVE_STUDIO_MAX_STEP_BEATS, Math.max(minimum, rounded)).toFixed(4));
+}
+
+function inferLiveStudioAutoStep(cleanedGroups, beatSeconds) {
+  const gaps = [];
+  for (let index = 1; index < cleanedGroups.length; index += 1) {
+    const gapBeats = (cleanedGroups[index].time - cleanedGroups[index - 1].time) / beatSeconds;
+    if (gapBeats >= LIVE_STUDIO_MIN_NOTE_BEATS) gaps.push(gapBeats);
+  }
+
+  if (!gaps.length) return 1;
+  gaps.sort((a, b) => a - b);
+  const middle = Math.floor(gaps.length / 2);
+  const median = gaps.length % 2 ? gaps[middle] : (gaps[middle - 1] + gaps[middle]) / 2;
+  return quantizeLiveStudioBeats(median, LIVE_STUDIO_MIN_NOTE_BEATS);
+}
+
+function formatLiveStudioStep(beats) {
+  const safeBeats = Math.max(LIVE_STUDIO_MIN_NOTE_BEATS, Number(beats) || 1);
+  if (safeBeats === 1) return "1 beat";
+  return `${safeBeats} beats`;
 }
 
 function liveStudioGroupsToEvents(groups) {
@@ -1925,6 +1941,7 @@ function liveStudioGroupsToEvents(groups) {
     .sort((a, b) => a.time - b.time);
 
   const events = [];
+  const autoStep = inferLiveStudioAutoStep(cleanedGroups, beatSeconds);
   let cursorBeat = 0;
   cleanedGroups.forEach((group, index) => {
     const startBeat = group.time / beatSeconds;
@@ -1938,8 +1955,7 @@ function liveStudioGroupsToEvents(groups) {
     }
 
     const nextGroup = cleanedGroups[index + 1];
-    const fallbackDuration = Math.max(0.5, Math.min(2, Number(state.duration) || 1));
-    const nextStartBeat = nextGroup ? Math.max(startBeat + LIVE_STUDIO_MIN_NOTE_BEATS, nextGroup.time / beatSeconds) : startBeat + fallbackDuration;
+    const nextStartBeat = nextGroup ? Math.max(startBeat + LIVE_STUDIO_MIN_NOTE_BEATS, nextGroup.time / beatSeconds) : startBeat + autoStep;
     const noteDuration = quantizeLiveStudioBeats(nextStartBeat - startBeat, LIVE_STUDIO_MIN_NOTE_BEATS);
     events.push({
       type: "note",
@@ -1949,7 +1965,7 @@ function liveStudioGroupsToEvents(groups) {
     cursorBeat = Math.max(cursorBeat, startBeat) + noteDuration;
   });
 
-  return events;
+  return { events, autoStep };
 }
 
 function stopLiveStudio() {
@@ -1958,12 +1974,14 @@ function stopLiveStudio() {
   state.liveStudio.recording = false;
   clearLiveStudioTimer();
 
-  const capturedEvents = liveStudioGroupsToEvents(state.liveStudio.groups);
+  const captured = liveStudioGroupsToEvents(state.liveStudio.groups);
+  const capturedEvents = captured.events;
+  state.liveStudio.autoStep = captured.autoStep;
   if (capturedEvents.length) {
     state.events = capturedEvents;
     state.pending = [];
     state.liveStudio.open = false;
-    setStatus(`Live studio captured ${capturedEvents.length} timed boxes`);
+    setStatus(`Live studio captured ${capturedEvents.length} timed boxes, auto step ${formatLiveStudioStep(captured.autoStep)}`);
   } else {
     state.liveStudio.open = false;
     setStatus("Live studio stopped with no keys");
@@ -1990,8 +2008,8 @@ function handleLiveStudioKey(id) {
   const time = liveStudioElapsedSeconds();
   const groups = state.liveStudio.groups;
   const lastGroup = groups[groups.length - 1];
-  if (state.liveStudio.chordMode && lastGroup && time - lastGroup.time <= LIVE_STUDIO_CHORD_WINDOW_SECONDS) {
-    if (!lastGroup.notes.includes(id)) lastGroup.notes.push(id);
+  if (lastGroup && time - lastGroup.time <= LIVE_STUDIO_CHORD_WINDOW_SECONDS && !lastGroup.notes.includes(id)) {
+    lastGroup.notes.push(id);
     lastGroup.notes.sort((a, b) => a - b);
   } else {
     groups.push({ time, notes: [id] });
@@ -9706,18 +9724,6 @@ function bindEvents() {
   }
   if (els.liveStudioStopBtn) {
     els.liveStudioStopBtn.addEventListener("click", stopLiveStudio);
-  }
-  if (els.liveStudioSingleBtn) {
-    els.liveStudioSingleBtn.addEventListener("click", () => {
-      state.liveStudio.chordMode = false;
-      renderLiveStudio();
-    });
-  }
-  if (els.liveStudioChordBtn) {
-    els.liveStudioChordBtn.addEventListener("click", () => {
-      state.liveStudio.chordMode = true;
-      renderLiveStudio();
-    });
   }
   window.addEventListener("resize", () => {
     renderTimeline();

@@ -2991,7 +2991,6 @@ textarea::placeholder {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .live-studio-toolbar .mode-switch,
   .live-studio-readout {
     grid-column: 1 / -1;
   }
