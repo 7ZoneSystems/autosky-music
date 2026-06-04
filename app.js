@@ -406,6 +406,7 @@ const els = {
   audioWizardKeyDescription: document.querySelector("#audioWizardKeyDescription"),
   audioShowOutputBtn: document.querySelector("#audioShowOutputBtn"),
   audioRegenerateBtn: document.querySelector("#audioRegenerateBtn"),
+  audioSheetRegenerateBtn: document.querySelector("#audioSheetRegenerateBtn"),
   audioPlayResultBtn: document.querySelector("#audioPlayResultBtn"),
   audioRestartWizardBtn: document.querySelector("#audioRestartWizardBtn"),
   audioResultTabs: document.querySelector("#audioResultTabs"),
@@ -2845,6 +2846,13 @@ function openAudioResults() {
   setAudioResultTab("sheets");
   document.body.classList.add("audio-results-open");
   window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function reopenAudioRegenerationControls() {
+  syncControls();
+  setAudioFinalExportMode(false);
+  setAudioWizardStep("sensitivity");
+  setAudioStatus("Adjust sliders and start checking again");
 }
 
 function wizardProgressForStatus(text) {
@@ -9008,7 +9016,7 @@ function setConverterMode(mode) {
   [els.homeBtn, els.savedSongsBtn, els.marketplaceBtn].forEach((button) => {
     if (button) button.classList.remove("active");
   });
-  if (nextMode === "home" && els.homeBtn) els.homeBtn.classList.add("active");
+  if ((nextMode === "landing" || nextMode === "home") && els.homeBtn) els.homeBtn.classList.add("active");
   if (nextMode === "saved" && els.savedSongsBtn) els.savedSongsBtn.classList.add("active");
   if (nextMode === "marketplace" && els.marketplaceBtn) els.marketplaceBtn.classList.add("active");
   setAudioFinalExportMode(false);
@@ -9068,7 +9076,7 @@ function bindEvents() {
   els.loginGateGuestBtn.addEventListener("click", continueWithoutLogin);
   els.chooseAudioBtn.addEventListener("click", () => setConverterMode("audio"));
   els.chooseScoreBtn.addEventListener("click", () => setConverterMode("score"));
-  els.homeBtn.addEventListener("click", () => setConverterMode("home"));
+  els.homeBtn.addEventListener("click", () => setConverterMode("landing"));
   els.savedSongsBtn.addEventListener("click", openSavedSongs);
   els.marketplaceBtn.addEventListener("click", openMarketplace);
   if (els.refreshSavedSongsBtn) {
@@ -9115,11 +9123,10 @@ function bindEvents() {
   });
   els.audioShowOutputBtn.addEventListener("click", openAudioResults);
   if (els.audioRegenerateBtn) {
-    els.audioRegenerateBtn.addEventListener("click", () => {
-      syncControls();
-      setAudioWizardStep("sensitivity");
-      setAudioStatus("Adjust sliders and start checking again");
-    });
+    els.audioRegenerateBtn.addEventListener("click", reopenAudioRegenerationControls);
+  }
+  if (els.audioSheetRegenerateBtn) {
+    els.audioSheetRegenerateBtn.addEventListener("click", reopenAudioRegenerationControls);
   }
   if (els.audioPlayResultBtn) {
     els.audioPlayResultBtn.addEventListener("click", () => {

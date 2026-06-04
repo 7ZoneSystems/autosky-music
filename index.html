@@ -19,6 +19,34 @@
       </div>
     </div>
 
+    <nav class="global-nav" aria-label="Primary navigation">
+      <button id="homeBtn" class="global-nav-button" type="button" aria-label="Home">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M3.5 11.2 12 4l8.5 7.2"></path>
+          <path d="M5.5 10.4V20h5v-5.2h5V20h5v-9.6"></path>
+        </svg>
+        <span>Home</span>
+      </button>
+      <button id="savedSongsBtn" class="global-nav-button" type="button" aria-label="Saved songs">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M7 4.5h8.2a3.3 3.3 0 0 1 3.3 3.3V20l-6.5-3.5L5.5 20V6A1.5 1.5 0 0 1 7 4.5Z"></path>
+          <path d="M9 8.5h6"></path>
+          <path d="M9 12h4"></path>
+        </svg>
+        <span>Saved songs</span>
+      </button>
+      <button id="marketplaceBtn" class="global-nav-button" type="button" aria-label="Marketplace">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4.5 10.2h15l-1.2-5.7H5.7Z"></path>
+          <path d="M6 10.2V20h12v-9.8"></path>
+          <path d="M9 20v-5h6v5"></path>
+          <path d="M7.2 10.2a2.3 2.3 0 0 0 4.6 0"></path>
+          <path d="M11.8 10.2a2.3 2.3 0 0 0 4.6 0"></path>
+        </svg>
+        <span>Marketplace</span>
+      </button>
+    </nav>
+
     <div class="app-frame">
       <section id="landingScreen" class="landing-screen" aria-labelledby="landingTitle">
         <div class="landing-copy">
@@ -101,9 +129,6 @@
           </div>
         </div>
         <div class="top-actions">
-          <button id="homeBtn" class="ghost-button" type="button">Home</button>
-          <button id="savedSongsBtn" class="ghost-button" type="button">Saved songs</button>
-          <button id="marketplaceBtn" class="ghost-button" type="button">Marketplace</button>
           <button id="saveBtn" class="ghost-button" type="button">Save</button>
           <button id="loadBtn" class="ghost-button" type="button">Load</button>
         </div>
@@ -204,6 +229,7 @@
             <div class="transport">
               <button id="playBtn" class="primary-button" type="button">Play</button>
               <button id="stopBtn" class="ghost-button" type="button">Stop</button>
+              <button id="audioSheetRegenerateBtn" class="ghost-button" type="button">Regenerate</button>
             </div>
           </div>
 
