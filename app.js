@@ -659,6 +659,154 @@ const GUIDE_FLOWS = {
   ]
 };
 
+const LANGUAGE_STORAGE_KEY = "sky-piano-language-v1";
+const DEFAULT_LANGUAGE = "en";
+const RTL_LANGUAGES = new Set(["ar"]);
+const SUPPORTED_LANGUAGE_OPTIONS = [
+  { id: "auto", label: "Auto" },
+  { id: "en", label: "English" },
+  { id: "ja", label: "日本語" },
+  { id: "zh-CN", label: "简体中文" },
+  { id: "zh-TW", label: "繁體中文" },
+  { id: "ko", label: "한국어" },
+  { id: "hi", label: "हिन्दी" },
+  { id: "es", label: "Español" },
+  { id: "fr", label: "Français" },
+  { id: "de", label: "Deutsch" },
+  { id: "pt", label: "Português" },
+  { id: "id", label: "Bahasa Indonesia" },
+  { id: "ar", label: "العربية" }
+];
+const SUPPORTED_LANGUAGE_IDS = new Set(SUPPORTED_LANGUAGE_OPTIONS.map((language) => language.id).filter((id) => id !== "auto"));
+const COUNTRY_LANGUAGE_MAP = {
+  JP: "ja",
+  CN: "zh-CN",
+  SG: "zh-CN",
+  TW: "zh-TW",
+  HK: "zh-TW",
+  MO: "zh-TW",
+  KR: "ko",
+  IN: "hi",
+  ES: "es",
+  MX: "es",
+  AR: "es",
+  CO: "es",
+  CL: "es",
+  PE: "es",
+  FR: "fr",
+  BE: "fr",
+  CH: "de",
+  DE: "de",
+  AT: "de",
+  BR: "pt",
+  PT: "pt",
+  ID: "id",
+  SA: "ar",
+  AE: "ar",
+  EG: "ar",
+  QA: "ar",
+  KW: "ar",
+  MA: "ar"
+};
+const TIMEZONE_LANGUAGE_RULES = [
+  [/^Asia\/Tokyo$/, "ja"],
+  [/^Asia\/Shanghai$/, "zh-CN"],
+  [/^Asia\/Chongqing$/, "zh-CN"],
+  [/^Asia\/Urumqi$/, "zh-CN"],
+  [/^Asia\/Hong_Kong$/, "zh-TW"],
+  [/^Asia\/Macau$/, "zh-TW"],
+  [/^Asia\/Taipei$/, "zh-TW"],
+  [/^Asia\/Seoul$/, "ko"],
+  [/^Asia\/Kolkata$/, "hi"],
+  [/^Europe\/Madrid$/, "es"],
+  [/^America\/(Mexico_City|Bogota|Buenos_Aires|Santiago|Lima)/, "es"],
+  [/^Europe\/Paris$/, "fr"],
+  [/^Europe\/Berlin$/, "de"],
+  [/^Europe\/Vienna$/, "de"],
+  [/^America\/Sao_Paulo$/, "pt"],
+  [/^Europe\/Lisbon$/, "pt"],
+  [/^Asia\/Jakarta$/, "id"],
+  [/^Asia\/(Riyadh|Dubai|Qatar|Kuwait)$/, "ar"],
+  [/^Africa\/(Cairo|Casablanca)$/, "ar"]
+];
+
+const UI_TRANSLATION_ROWS = [
+  ["Sky Piano Sheet Maker", { ja: "Skyピアノシートメーカー", "zh-CN": "Sky 钢琴谱制作器", "zh-TW": "Sky 鋼琴譜製作器", ko: "Sky 피아노 악보 제작기", hi: "Sky पियानो शीट मेकर", es: "Creador de partituras Sky Piano", fr: "Créateur de partitions Sky Piano", de: "Sky-Piano-Noten Maker", pt: "Criador de partituras Sky Piano", id: "Pembuat lembar Sky Piano", ar: "صانع نوتات بيانو Sky" }],
+  ["Language", { ja: "言語", "zh-CN": "语言", "zh-TW": "語言", ko: "언어", hi: "भाषा", es: "Idioma", fr: "Langue", de: "Sprache", pt: "Idioma", id: "Bahasa", ar: "اللغة" }],
+  ["Auto", { ja: "自動", "zh-CN": "自动", "zh-TW": "自動", ko: "자동", hi: "ऑटो", es: "Auto", fr: "Auto", de: "Auto", pt: "Auto", id: "Otomatis", ar: "تلقائي" }],
+  ["Back", { ja: "戻る", "zh-CN": "返回", "zh-TW": "返回", ko: "뒤로", hi: "वापस", es: "Atrás", fr: "Retour", de: "Zurück", pt: "Voltar", id: "Kembali", ar: "رجوع" }],
+  ["Home", { ja: "ホーム", "zh-CN": "主页", "zh-TW": "首頁", ko: "홈", hi: "होम", es: "Inicio", fr: "Accueil", de: "Start", pt: "Início", id: "Beranda", ar: "الرئيسية" }],
+  ["Dashboard", { ja: "ダッシュボード", "zh-CN": "仪表盘", "zh-TW": "儀表板", ko: "대시보드", hi: "डैशबोर्ड", es: "Panel", fr: "Tableau", de: "Dashboard", pt: "Painel", id: "Dasbor", ar: "لوحة التحكم" }],
+  ["Saved songs", { ja: "保存した曲", "zh-CN": "已保存歌曲", "zh-TW": "已儲存歌曲", ko: "저장한 곡", hi: "सेव किए गीत", es: "Canciones guardadas", fr: "Morceaux sauvegardés", de: "Gespeicherte Songs", pt: "Músicas salvas", id: "Lagu tersimpan", ar: "الأغاني المحفوظة" }],
+  ["Marketplace", { ja: "マーケット", "zh-CN": "市场", "zh-TW": "市集", ko: "마켓플레이스", hi: "मार्केटप्लेस", es: "Mercado", fr: "Marché", de: "Marktplatz", pt: "Mercado", id: "Marketplace", ar: "السوق" }],
+  ["Login with Google", { ja: "Googleでログイン", "zh-CN": "使用 Google 登录", "zh-TW": "使用 Google 登入", ko: "Google로 로그인", hi: "Google से लॉगिन", es: "Iniciar con Google", fr: "Connexion Google", de: "Mit Google anmelden", pt: "Entrar com Google", id: "Masuk dengan Google", ar: "تسجيل الدخول عبر Google" }],
+  ["Continue with Google", { ja: "Googleで続行", "zh-CN": "使用 Google 继续", "zh-TW": "使用 Google 繼續", ko: "Google로 계속", hi: "Google से जारी रखें", es: "Continuar con Google", fr: "Continuer avec Google", de: "Mit Google fortfahren", pt: "Continuar com Google", id: "Lanjut dengan Google", ar: "المتابعة عبر Google" }],
+  ["Logout", { ja: "ログアウト", "zh-CN": "退出登录", "zh-TW": "登出", ko: "로그아웃", hi: "लॉग आउट", es: "Salir", fr: "Déconnexion", de: "Abmelden", pt: "Sair", id: "Keluar", ar: "تسجيل الخروج" }],
+  ["Account", { ja: "アカウント", "zh-CN": "账户", "zh-TW": "帳號", ko: "계정", hi: "खाता", es: "Cuenta", fr: "Compte", de: "Konto", pt: "Conta", id: "Akun", ar: "الحساب" }],
+  ["Checking login", { ja: "ログイン確認中", "zh-CN": "正在检查登录", "zh-TW": "正在檢查登入", ko: "로그인 확인 중", hi: "लॉगिन जांच रहे हैं", es: "Comprobando login", fr: "Vérification", de: "Login prüfen", pt: "Verificando login", id: "Memeriksa login", ar: "جاري فحص الدخول" }],
+  ["Login unavailable", { ja: "ログイン不可", "zh-CN": "登录不可用", "zh-TW": "登入不可用", ko: "로그인 불가", hi: "लॉगिन उपलब्ध नहीं", es: "Login no disponible", fr: "Connexion indisponible", de: "Login nicht verfügbar", pt: "Login indisponível", id: "Login tidak tersedia", ar: "الدخول غير متاح" }],
+  ["Sky music translator", { ja: "Sky音楽トランスレーター", "zh-CN": "Sky 音乐转换器", "zh-TW": "Sky 音樂轉換器", ko: "Sky 음악 번역기", hi: "Sky संगीत ट्रांसलेटर", es: "Traductor musical Sky", fr: "Traducteur de musique Sky", de: "Sky-Musik-Übersetzer", pt: "Tradutor de música Sky", id: "Penerjemah musik Sky", ar: "مترجم موسيقى Sky" }],
+  ["Turn songs and piano sheets into playable Sky music.", { ja: "曲やピアノ譜を演奏できるSky音楽に変換。", "zh-CN": "把歌曲和钢琴谱变成可演奏的 Sky 音乐。", "zh-TW": "把歌曲和鋼琴譜變成可演奏的 Sky 音樂。", ko: "노래와 피아노 악보를 연주 가능한 Sky 음악으로 변환하세요.", hi: "गीत और पियानो शीट को बजाने योग्य Sky संगीत में बदलें।", es: "Convierte canciones y partituras en música Sky tocable.", fr: "Transformez chansons et partitions en musique Sky jouable.", de: "Wandle Songs und Klaviernoten in spielbare Sky-Musik um.", pt: "Transforme músicas e partituras em música Sky tocável.", id: "Ubah lagu dan partitur piano menjadi musik Sky yang bisa dimainkan.", ar: "حوّل الأغاني والنوتات إلى موسيقى Sky قابلة للعزف." }],
+  ["Try it out", { ja: "試してみる", "zh-CN": "试试看", "zh-TW": "試試看", ko: "사용해 보기", hi: "आज़माएँ", es: "Probar", fr: "Essayer", de: "Ausprobieren", pt: "Testar", id: "Coba", ar: "جرّب الآن" }],
+  ["Sky keys", { ja: "Skyキー", "zh-CN": "Sky 按键", "zh-TW": "Sky 按鍵", ko: "Sky 키", hi: "Sky कुंजियाँ", es: "Teclas Sky", fr: "Touches Sky", de: "Sky-Tasten", pt: "Teclas Sky", id: "Tombol Sky", ar: "مفاتيح Sky" }],
+  ["BPM + key", { ja: "BPM + キー", "zh-CN": "BPM + 调", "zh-TW": "BPM + 調", ko: "BPM + 키", hi: "BPM + की", es: "BPM + tono", fr: "BPM + tonalité", de: "BPM + Tonart", pt: "BPM + tom", id: "BPM + kunci", ar: "BPM + المقام" }],
+  ["Share", { ja: "共有", "zh-CN": "分享", "zh-TW": "分享", ko: "공유", hi: "शेयर", es: "Compartir", fr: "Partager", de: "Teilen", pt: "Compartilhar", id: "Bagikan", ar: "مشاركة" }],
+  ["Audio", { ja: "音声", "zh-CN": "音频", "zh-TW": "音訊", ko: "오디오", hi: "ऑडियो", es: "Audio", fr: "Audio", de: "Audio", pt: "Áudio", id: "Audio", ar: "الصوت" }],
+  ["Sheet", { ja: "シート", "zh-CN": "乐谱", "zh-TW": "樂譜", ko: "악보", hi: "शीट", es: "Partitura", fr: "Partition", de: "Noten", pt: "Partitura", id: "Lembar", ar: "النوتة" }],
+  ["Audio to Sky sheet?", { ja: "音声をSkyシートへ？", "zh-CN": "音频转 Sky 谱？", "zh-TW": "音訊轉 Sky 譜？", ko: "오디오를 Sky 악보로?", hi: "ऑडियो से Sky शीट?", es: "¿Audio a partitura Sky?", fr: "Audio vers partition Sky ?", de: "Audio zu Sky-Noten?", pt: "Áudio para partitura Sky?", id: "Audio ke lembar Sky?", ar: "صوت إلى نوتة Sky؟" }],
+  ["Piano sheet to Sky sheet?", { ja: "ピアノ譜をSkyシートへ？", "zh-CN": "钢琴谱转 Sky 谱？", "zh-TW": "鋼琴譜轉 Sky 譜？", ko: "피아노 악보를 Sky 악보로?", hi: "पियानो शीट से Sky शीट?", es: "¿Partitura a Sky?", fr: "Partition piano vers Sky ?", de: "Klaviernoten zu Sky?", pt: "Partitura para Sky?", id: "Partitur ke Sky?", ar: "نوتة بيانو إلى Sky؟" }],
+  ["Audio to Sky sheet", { ja: "音声からSkyシート", "zh-CN": "音频转 Sky 谱", "zh-TW": "音訊轉 Sky 譜", ko: "오디오를 Sky 악보로", hi: "ऑडियो से Sky शीट", es: "Audio a partitura Sky", fr: "Audio vers partition Sky", de: "Audio zu Sky-Noten", pt: "Áudio para partitura Sky", id: "Audio ke lembar Sky", ar: "صوت إلى نوتة Sky" }],
+  ["Piano sheet to Sky sheet", { ja: "ピアノ譜からSkyシート", "zh-CN": "钢琴谱转 Sky 谱", "zh-TW": "鋼琴譜轉 Sky 譜", ko: "피아노 악보를 Sky 악보로", hi: "पियानो शीट से Sky शीट", es: "Partitura a Sky", fr: "Partition piano vers Sky", de: "Klaviernoten zu Sky", pt: "Partitura para Sky", id: "Partitur ke Sky", ar: "نوتة بيانو إلى Sky" }],
+  ["Play", { ja: "再生", "zh-CN": "播放", "zh-TW": "播放", ko: "재생", hi: "चलाएँ", es: "Reproducir", fr: "Lire", de: "Abspielen", pt: "Tocar", id: "Putar", ar: "تشغيل" }],
+  ["Stop", { ja: "停止", "zh-CN": "停止", "zh-TW": "停止", ko: "정지", hi: "रोकें", es: "Detener", fr: "Arrêter", de: "Stopp", pt: "Parar", id: "Berhenti", ar: "إيقاف" }],
+  ["Live studio", { ja: "ライブスタジオ", "zh-CN": "实时工作室", "zh-TW": "即時工作室", ko: "라이브 스튜디오", hi: "लाइव स्टूडियो", es: "Estudio en vivo", fr: "Studio live", de: "Live-Studio", pt: "Estúdio ao vivo", id: "Studio live", ar: "الاستوديو المباشر" }],
+  ["Regenerate", { ja: "再生成", "zh-CN": "重新生成", "zh-TW": "重新生成", ko: "다시 생성", hi: "फिर बनाएं", es: "Regenerar", fr: "Régénérer", de: "Neu erzeugen", pt: "Regenerar", id: "Buat ulang", ar: "إعادة التوليد" }],
+  ["Generate new", { ja: "新規生成", "zh-CN": "生成新的", "zh-TW": "產生新的", ko: "새로 생성", hi: "नया बनाएं", es: "Generar nuevo", fr: "Nouveau", de: "Neu generieren", pt: "Gerar novo", id: "Buat baru", ar: "إنشاء جديد" }],
+  ["Title", { ja: "タイトル", "zh-CN": "标题", "zh-TW": "標題", ko: "제목", hi: "शीर्षक", es: "Título", fr: "Titre", de: "Titel", pt: "Título", id: "Judul", ar: "العنوان" }],
+  ["Transcriber", { ja: "採譜者", "zh-CN": "记谱者", "zh-TW": "記譜者", ko: "채보자", hi: "ट्रांसक्राइबर", es: "Transcriptor", fr: "Transcripteur", de: "Transkriptor", pt: "Transcritor", id: "Transkriptor", ar: "الناسخ" }],
+  ["Rest", { ja: "休符", "zh-CN": "休止", "zh-TW": "休止", ko: "쉼표", hi: "विराम", es: "Silencio", fr: "Silence", de: "Pause", pt: "Pausa", id: "Jeda", ar: "سكتة" }],
+  ["Bar", { ja: "小節", "zh-CN": "小节", "zh-TW": "小節", ko: "마디", hi: "बार", es: "Compás", fr: "Mesure", de: "Takt", pt: "Compasso", id: "Bar", ar: "مازورة" }],
+  ["New line", { ja: "改行", "zh-CN": "换行", "zh-TW": "換行", ko: "새 줄", hi: "नई लाइन", es: "Nueva línea", fr: "Nouvelle ligne", de: "Neue Zeile", pt: "Nova linha", id: "Baris baru", ar: "سطر جديد" }],
+  ["Undo", { ja: "元に戻す", "zh-CN": "撤销", "zh-TW": "復原", ko: "실행 취소", hi: "अनडू", es: "Deshacer", fr: "Annuler", de: "Rückgängig", pt: "Desfazer", id: "Urungkan", ar: "تراجع" }],
+  ["Clear", { ja: "クリア", "zh-CN": "清空", "zh-TW": "清除", ko: "지우기", hi: "साफ़", es: "Limpiar", fr: "Effacer", de: "Leeren", pt: "Limpar", id: "Bersihkan", ar: "مسح" }],
+  ["Save", { ja: "保存", "zh-CN": "保存", "zh-TW": "儲存", ko: "저장", hi: "सेव", es: "Guardar", fr: "Sauvegarder", de: "Speichern", pt: "Salvar", id: "Simpan", ar: "حفظ" }],
+  ["Cloud save", { ja: "クラウド保存", "zh-CN": "云保存", "zh-TW": "雲端儲存", ko: "클라우드 저장", hi: "क्लाउड सेव", es: "Guardar en nube", fr: "Sauvegarde cloud", de: "Cloud speichern", pt: "Salvar na nuvem", id: "Simpan cloud", ar: "حفظ سحابي" }],
+  ["My sheets", { ja: "自分のシート", "zh-CN": "我的谱子", "zh-TW": "我的譜", ko: "내 악보", hi: "मेरी शीट्स", es: "Mis partituras", fr: "Mes partitions", de: "Meine Noten", pt: "Minhas partituras", id: "Lembar saya", ar: "نوتاتي" }],
+  ["Audio file", { ja: "音声ファイル", "zh-CN": "音频文件", "zh-TW": "音訊檔案", ko: "오디오 파일", hi: "ऑडियो फ़ाइल", es: "Archivo de audio", fr: "Fichier audio", de: "Audiodatei", pt: "Arquivo de áudio", id: "File audio", ar: "ملف صوتي" }],
+  ["Melody sensitivity", { ja: "メロディ感度", "zh-CN": "旋律灵敏度", "zh-TW": "旋律靈敏度", ko: "멜로디 감도", hi: "मेलोडी संवेदनशीलता", es: "Sensibilidad de melodía", fr: "Sensibilité mélodie", de: "Melodie-Empfindlichkeit", pt: "Sensibilidade da melodia", id: "Sensitivitas melodi", ar: "حساسية اللحن" }],
+  ["Chord sensitivity", { ja: "コード感度", "zh-CN": "和弦灵敏度", "zh-TW": "和弦靈敏度", ko: "코드 감도", hi: "कॉर्ड संवेदनशीलता", es: "Sensibilidad de acordes", fr: "Sensibilité accords", de: "Akkord-Empfindlichkeit", pt: "Sensibilidade dos acordes", id: "Sensitivitas chord", ar: "حساسية الأوتار" }],
+  ["Continue", { ja: "続行", "zh-CN": "继续", "zh-TW": "繼續", ko: "계속", hi: "जारी रखें", es: "Continuar", fr: "Continuer", de: "Weiter", pt: "Continuar", id: "Lanjut", ar: "متابعة" }],
+  ["Start checking", { ja: "チェック開始", "zh-CN": "开始检查", "zh-TW": "開始檢查", ko: "검사 시작", hi: "जांच शुरू", es: "Empezar revisión", fr: "Lancer", de: "Prüfung starten", pt: "Começar", id: "Mulai cek", ar: "بدء الفحص" }],
+  ["Auto BPM after analysis", { ja: "解析後にBPM自動設定", "zh-CN": "分析后自动 BPM", "zh-TW": "分析後自動 BPM", ko: "분석 후 자동 BPM", hi: "विश्लेषण के बाद ऑटो BPM", es: "BPM automático tras análisis", fr: "BPM auto après analyse", de: "Auto-BPM nach Analyse", pt: "BPM automático após análise", id: "BPM otomatis setelah analisis", ar: "BPM تلقائي بعد التحليل" }],
+  ["Auto key after analysis", { ja: "解析後にキー自動設定", "zh-CN": "分析后自动调", "zh-TW": "分析後自動調", ko: "분석 후 자동 키", hi: "विश्लेषण के बाद ऑटो की", es: "Tono automático tras análisis", fr: "Tonalité auto après analyse", de: "Auto-Tonart nach Analyse", pt: "Tom automático após análise", id: "Kunci otomatis setelah analisis", ar: "مقام تلقائي بعد التحليل" }],
+  ["Timing enhancer", { ja: "タイミング補正", "zh-CN": "时值增强", "zh-TW": "時值增強", ko: "타이밍 보정", hi: "टाइमिंग एन्हांसर", es: "Mejora de timing", fr: "Amélioration timing", de: "Timing-Verbesserung", pt: "Melhoria de tempo", id: "Penyempurna timing", ar: "محسن التوقيت" }],
+  ["Continue to final output", { ja: "最終出力へ", "zh-CN": "进入最终输出", "zh-TW": "前往最終輸出", ko: "최종 출력으로", hi: "अंतिम आउटपुट पर जाएं", es: "Ir al resultado final", fr: "Voir le résultat final", de: "Zum Endergebnis", pt: "Ir para saída final", id: "Lanjut ke hasil akhir", ar: "الانتقال للنتيجة النهائية" }],
+  ["Use another audio", { ja: "別の音声を使う", "zh-CN": "使用其他音频", "zh-TW": "使用其他音訊", ko: "다른 오디오 사용", hi: "दूसरा ऑडियो", es: "Usar otro audio", fr: "Autre audio", de: "Anderes Audio", pt: "Usar outro áudio", id: "Gunakan audio lain", ar: "استخدم صوتًا آخر" }],
+  ["Not satisfied? Try with different sliders.", { ja: "満足できない？スライダーを変えて試してください。", "zh-CN": "不满意？试试不同滑块。", "zh-TW": "不滿意？試試不同滑桿。", ko: "만족스럽지 않나요? 슬라이더를 바꿔 보세요.", hi: "संतुष्ट नहीं? अलग स्लाइडर आज़माएँ।", es: "¿No te gusta? Prueba otros deslizadores.", fr: "Pas satisfait ? Essayez d'autres réglages.", de: "Nicht zufrieden? Andere Regler probieren.", pt: "Não gostou? Tente outros controles.", id: "Belum puas? Coba slider lain.", ar: "غير راضٍ؟ جرّب منزلقات مختلفة." }],
+  ["May I help you?", { ja: "お手伝いしましょうか？", "zh-CN": "需要我帮你吗？", "zh-TW": "需要我幫你嗎？", ko: "도와드릴까요?", hi: "क्या मैं मदद करूँ?", es: "¿Te ayudo?", fr: "Besoin d'aide ?", de: "Kann ich helfen?", pt: "Posso ajudar?", id: "Perlu bantuan?", ar: "هل أساعدك؟" }],
+  ["App guide", { ja: "アプリガイド", "zh-CN": "应用指南", "zh-TW": "應用指南", ko: "앱 가이드", hi: "ऐप गाइड", es: "Guía", fr: "Guide", de: "App-Hilfe", pt: "Guia", id: "Panduan", ar: "دليل التطبيق" }],
+  ["Start guide", { ja: "ガイド開始", "zh-CN": "开始指南", "zh-TW": "開始指南", ko: "가이드 시작", hi: "गाइड शुरू", es: "Iniciar guía", fr: "Démarrer", de: "Guide starten", pt: "Iniciar guia", id: "Mulai panduan", ar: "بدء الدليل" }],
+  ["Skip", { ja: "スキップ", "zh-CN": "跳过", "zh-TW": "略過", ko: "건너뛰기", hi: "स्किप", es: "Saltar", fr: "Ignorer", de: "Überspringen", pt: "Pular", id: "Lewati", ar: "تخطي" }],
+  ["Finish", { ja: "完了", "zh-CN": "完成", "zh-TW": "完成", ko: "완료", hi: "समाप्त", es: "Finalizar", fr: "Terminer", de: "Fertig", pt: "Finalizar", id: "Selesai", ar: "إنهاء" }],
+  ["Waiting...", { ja: "待機中...", "zh-CN": "等待中...", "zh-TW": "等待中...", ko: "대기 중...", hi: "प्रतीक्षा...", es: "Esperando...", fr: "En attente...", de: "Warten...", pt: "Aguardando...", id: "Menunggu...", ar: "بانتظار..." }],
+  ["Browse marketplace", { ja: "マーケットを見る", "zh-CN": "浏览市场", "zh-TW": "瀏覽市集", ko: "마켓 둘러보기", hi: "मार्केटप्लेस देखें", es: "Ver mercado", fr: "Voir le marché", de: "Marktplatz ansehen", pt: "Ver mercado", id: "Lihat marketplace", ar: "تصفح السوق" }],
+  ["Log in", { ja: "ログイン", "zh-CN": "登录", "zh-TW": "登入", ko: "로그인", hi: "लॉगिन", es: "Entrar", fr: "Connexion", de: "Anmelden", pt: "Entrar", id: "Masuk", ar: "تسجيل الدخول" }],
+  ["Open marketplace", { ja: "マーケットを開く", "zh-CN": "打开市场", "zh-TW": "開啟市集", ko: "마켓 열기", hi: "मार्केटप्लेस खोलें", es: "Abrir mercado", fr: "Ouvrir le marché", de: "Marktplatz öffnen", pt: "Abrir mercado", id: "Buka marketplace", ar: "فتح السوق" }],
+  ["Play any shared sheet", { ja: "共有シートを再生", "zh-CN": "播放任意共享谱", "zh-TW": "播放任意共享譜", ko: "공유 악보 재생", hi: "कोई साझा शीट चलाएँ", es: "Reproduce una partitura", fr: "Lire une partition partagée", de: "Geteilte Noten abspielen", pt: "Toque uma partitura", id: "Putar lembar bersama", ar: "شغّل أي نوتة مشتركة" }],
+  ["Current sheet status", { ja: "現在のシート状態", "zh-CN": "当前乐谱状态", "zh-TW": "目前樂譜狀態", ko: "현재 악보 상태", hi: "मौजूदा शीट स्थिति", es: "Estado actual", fr: "État actuel", de: "Aktueller Status", pt: "Status atual", id: "Status lembar", ar: "حالة النوتة الحالية" }],
+  ["this shows current status of your sheet", { ja: "ここにシートの現在状態が表示されます", "zh-CN": "这里显示你的乐谱当前状态", "zh-TW": "這裡顯示你的樂譜目前狀態", ko: "여기에 현재 악보 상태가 표시됩니다", hi: "यह आपकी शीट की मौजूदा स्थिति दिखाता है", es: "esto muestra el estado actual de tu partitura", fr: "ceci affiche l'état actuel de votre partition", de: "Dies zeigt den aktuellen Status deiner Noten", pt: "isto mostra o status atual da sua partitura", id: "ini menampilkan status lembar saat ini", ar: "يعرض هذا الحالة الحالية للنوتة" }],
+  ["Marketplace sheet loaded", { ja: "マーケットシートを読み込みました", "zh-CN": "已加载市场乐谱", "zh-TW": "已載入市集樂譜", ko: "마켓 악보 로드됨", hi: "मार्केटप्लेस शीट लोड हुई", es: "Partitura cargada", fr: "Partition chargée", de: "Marktplatz-Noten geladen", pt: "Partitura carregada", id: "Lembar marketplace dimuat", ar: "تم تحميل نوتة السوق" }],
+  ["Playback stopped", { ja: "再生停止", "zh-CN": "播放已停止", "zh-TW": "播放已停止", ko: "재생 정지됨", hi: "प्लेबैक रुका", es: "Reproducción detenida", fr: "Lecture arrêtée", de: "Wiedergabe gestoppt", pt: "Reprodução parada", id: "Pemutaran berhenti", ar: "توقف التشغيل" }],
+  ["Playback finished", { ja: "再生完了", "zh-CN": "播放完成", "zh-TW": "播放完成", ko: "재생 완료", hi: "प्लेबैक पूरा", es: "Reproducción finalizada", fr: "Lecture terminée", de: "Wiedergabe beendet", pt: "Reprodução finalizada", id: "Pemutaran selesai", ar: "انتهى التشغيل" }]
+];
+const UI_TRANSLATIONS = UI_TRANSLATION_ROWS.reduce((tables, [phrase, translations]) => {
+  Object.entries(translations).forEach(([language, translated]) => {
+    if (!tables[language]) tables[language] = {};
+    tables[language][phrase] = translated;
+  });
+  return tables;
+}, {});
+
 const state = {
   converterMode: "landing",
   audioWizardStep: "file",
@@ -674,6 +822,13 @@ const state = {
     tourOpen: false,
     flags: {},
     seen: readGuideSeenState()
+  },
+  locale: {
+    language: DEFAULT_LANGUAGE,
+    selected: "auto",
+    source: "default",
+    timezone: "",
+    geo: null
   },
   auth: {
     loading: true,
@@ -762,6 +917,7 @@ const els = {
   authMenu: document.querySelector("#authMenu"),
   authMenuHomeBtn: document.querySelector("#authMenuHomeBtn"),
   authLogoutBtn: document.querySelector("#authLogoutBtn"),
+  languageSelect: document.querySelector("#languageSelect"),
   cloudSavePanel: document.querySelector("#cloudSavePanel"),
   cloudSaveStatus: document.querySelector("#cloudSaveStatus"),
   cloudSaveList: document.querySelector("#cloudSaveList"),
@@ -978,6 +1134,8 @@ let playbackSessionId = 0;
 let activePlaybackSource = null;
 let renderedPlaybackCache = null;
 let marketplaceSearchTimer = null;
+let translationFrame = null;
+const originalTextNodes = new WeakMap();
 const skyPianoSampleCache = new Map();
 const AUDIO_WIZARD_TIPS = [
   "Sky music tip: leave space between phrases so the 15-button grid can breathe.",
@@ -1050,6 +1208,165 @@ function formatDuration(seconds) {
   return `${formatTime(seconds)}.${String(Math.round((seconds % 1) * 10))}`;
 }
 
+function normalizeLanguageId(value) {
+  const raw = String(value || "").replace("_", "-").trim();
+  if (!raw) return "";
+  const lower = raw.toLowerCase();
+  if (lower === "auto") return "auto";
+  if (lower === "zh" || lower === "zh-cn" || lower === "zh-hans" || lower === "zh-sg") return "zh-CN";
+  if (lower === "zh-tw" || lower === "zh-hant" || lower === "zh-hk" || lower === "zh-mo") return "zh-TW";
+  const base = lower.split("-")[0];
+  if (SUPPORTED_LANGUAGE_IDS.has(base)) return base;
+  return SUPPORTED_LANGUAGE_IDS.has(raw) ? raw : "";
+}
+
+function getBrowserTimezone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+  } catch {
+    return "";
+  }
+}
+
+function languageFromTimezone(timezone) {
+  const value = String(timezone || "");
+  const rule = TIMEZONE_LANGUAGE_RULES.find(([pattern]) => pattern.test(value));
+  return rule ? rule[1] : "";
+}
+
+function firstNavigatorLanguage() {
+  const languages = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language];
+  return languages.map(normalizeLanguageId).find((language) => SUPPORTED_LANGUAGE_IDS.has(language)) || "";
+}
+
+function detectAutoLanguage(geo = state.locale.geo) {
+  const countryLanguage = geo && geo.country ? COUNTRY_LANGUAGE_MAP[String(geo.country).toUpperCase()] : "";
+  if (countryLanguage) return { language: countryLanguage, source: "ip" };
+
+  const timezone = state.locale.timezone || getBrowserTimezone();
+  const timezoneLanguage = languageFromTimezone(timezone);
+  if (timezoneLanguage) return { language: timezoneLanguage, source: "timezone" };
+
+  const browserLanguage = firstNavigatorLanguage();
+  if (browserLanguage) return { language: browserLanguage, source: "browser" };
+
+  return { language: DEFAULT_LANGUAGE, source: "default" };
+}
+
+function translatePhrase(text, language = state.locale.language) {
+  const value = String(text || "");
+  if (!value || language === DEFAULT_LANGUAGE) return value;
+  return (UI_TRANSLATIONS[language] && UI_TRANSLATIONS[language][value]) || value;
+}
+
+function translateTextWithWhitespace(text) {
+  const value = String(text || "");
+  const match = value.match(/^(\s*)([\s\S]*?)(\s*)$/);
+  if (!match) return translatePhrase(value);
+  const translated = translatePhrase(match[2]);
+  return `${match[1]}${translated}${match[3]}`;
+}
+
+function translateTextNodes(root) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      const parent = node.parentElement;
+      if (!parent) return NodeFilter.FILTER_REJECT;
+      if (["SCRIPT", "STYLE", "TEXTAREA"].includes(parent.tagName)) return NodeFilter.FILTER_REJECT;
+      if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    }
+  });
+
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  nodes.forEach((node) => {
+    if (!originalTextNodes.has(node)) originalTextNodes.set(node, node.nodeValue);
+    const original = originalTextNodes.get(node);
+    node.nodeValue = translateTextWithWhitespace(original);
+  });
+}
+
+function translateAttributes(root) {
+  const attributes = ["aria-label", "placeholder", "title"];
+  root.querySelectorAll("*").forEach((element) => {
+    attributes.forEach((attribute) => {
+      if (!element.hasAttribute(attribute)) return;
+      const storageName = `i18nOriginal${attribute.replace(/(^|-)([a-z])/g, (_, __, char) => char.toUpperCase())}`;
+      if (!element.dataset[storageName]) element.dataset[storageName] = element.getAttribute(attribute) || "";
+      element.setAttribute(attribute, translatePhrase(element.dataset[storageName]));
+    });
+  });
+}
+
+function applyTranslations(root = document.body) {
+  document.documentElement.lang = state.locale.language;
+  document.documentElement.dir = RTL_LANGUAGES.has(state.locale.language) ? "rtl" : "ltr";
+  document.title = translatePhrase("Sky Piano Sheet Maker");
+  if (els.languageSelect) els.languageSelect.value = state.locale.selected || state.locale.language;
+  translateTextNodes(root);
+  translateAttributes(root);
+}
+
+function scheduleTranslations() {
+  if (translationFrame) return;
+  translationFrame = window.requestAnimationFrame(() => {
+    translationFrame = null;
+    applyTranslations();
+  });
+}
+
+function setLanguage(language, options = {}) {
+  const normalized = normalizeLanguageId(language) || DEFAULT_LANGUAGE;
+  state.locale.language = normalized === "auto" ? DEFAULT_LANGUAGE : normalized;
+  state.locale.selected = options.selected || normalized;
+  state.locale.source = options.source || state.locale.source || "manual";
+  applyTranslations();
+}
+
+function detectLanguageSelection() {
+  const queryLanguage = normalizeLanguageId(new URL(window.location.href).searchParams.get("lang"));
+  if (queryLanguage && queryLanguage !== "auto") return { selected: queryLanguage, language: queryLanguage, source: "url" };
+
+  let stored = "";
+  try {
+    stored = normalizeLanguageId(window.localStorage.getItem(LANGUAGE_STORAGE_KEY));
+  } catch {
+    stored = "";
+  }
+  if (stored && stored !== "auto") return { selected: stored, language: stored, source: "manual" };
+  if (stored === "auto") return { selected: "auto", ...detectAutoLanguage() };
+
+  return { selected: "auto", ...detectAutoLanguage() };
+}
+
+async function initLocale() {
+  state.locale.timezone = getBrowserTimezone();
+  try {
+    const response = await fetch("/api/locale", { credentials: "same-origin" });
+    if (response.ok) state.locale.geo = await response.json();
+  } catch {
+    state.locale.geo = null;
+  }
+  const detected = detectLanguageSelection();
+  setLanguage(detected.language, { selected: detected.selected, source: detected.source });
+}
+
+function handleLanguageChange() {
+  const selected = normalizeLanguageId(els.languageSelect ? els.languageSelect.value : "auto") || "auto";
+  try {
+    window.localStorage.setItem(LANGUAGE_STORAGE_KEY, selected);
+  } catch {
+    // Language persistence should not block the UI.
+  }
+  if (selected === "auto") {
+    const detected = detectAutoLanguage();
+    setLanguage(detected.language, { selected: "auto", source: detected.source });
+    return;
+  }
+  setLanguage(selected, { selected, source: "manual" });
+}
+
 function labelForButton(button, notation = state.notation) {
   if (notation === "number") return String(button.id);
   if (notation === "note") return getCellNote(button.id);
@@ -1065,7 +1382,7 @@ function eventLabel(event, notation = state.notation) {
 }
 
 function setStatus(text) {
-  els.statusText.textContent = text;
+  els.statusText.textContent = translatePhrase(text);
 }
 
 function authDisplayName(user) {
@@ -1112,6 +1429,7 @@ function renderAuth() {
     renderSavedSongsPage();
     renderMarketplace();
     renderDashboard();
+    scheduleTranslations();
     return;
   }
   const name = authDisplayName(user);
@@ -1123,6 +1441,7 @@ function renderAuth() {
   renderSavedSongsPage();
   renderMarketplace();
   renderDashboard();
+  scheduleTranslations();
 }
 
 function renderNavigationState() {
@@ -1213,13 +1532,14 @@ function guideFlowLabel(flowId = state.guide.flowId) {
 function setGuidePromptText(surface) {
   if (!els.guidePromptText) return;
   if (surface === "landing" && !state.guide.seen[guideFlowIdForCurrentUser()]) {
-    els.guidePromptText.textContent = state.auth.user
+    const message = state.auth.user
       ? "I can guide you through marketplace playback, dashboard, audio translation, saving, publishing, and creator studio."
       : "You are logged out. I can suggest login first, or guide you through the public marketplace path.";
+    els.guidePromptText.textContent = translatePhrase(message);
     return;
   }
   const label = guideSurfaceLabel(surface).toLowerCase();
-  els.guidePromptText.textContent = `I can show what the ${label} page means.`;
+  els.guidePromptText.textContent = translatePhrase(`I can show what the ${label} page means.`);
 }
 
 function isGuideStepReady(step = currentGuideStep()) {
@@ -1420,12 +1740,12 @@ function renderGuide(options = {}) {
     const label = state.guide.flowId ? guideFlowLabel() : guideSurfaceLabel(surface);
     els.guideSurfaceLabel.textContent = `${label} · ${state.guide.stepIndex + 1}/${steps.length}`;
   }
-  if (els.guideTitle) els.guideTitle.textContent = step.title || "Guide";
-  if (els.guideText) els.guideText.textContent = step.text || "";
+  if (els.guideTitle) els.guideTitle.textContent = translatePhrase(step.title || "Guide");
+  if (els.guideText) els.guideText.textContent = translatePhrase(step.text || "");
   if (els.guideBackBtn) els.guideBackBtn.disabled = state.guide.stepIndex === 0;
-  if (els.guideSkipBtn) els.guideSkipBtn.textContent = step.skipLabel || "Skip";
+  if (els.guideSkipBtn) els.guideSkipBtn.textContent = translatePhrase(step.skipLabel || "Skip");
   if (els.guideContinueBtn) {
-    els.guideContinueBtn.textContent = guideContinueLabel(step);
+    els.guideContinueBtn.textContent = translatePhrase(guideContinueLabel(step));
     els.guideContinueBtn.disabled = !guideCanContinue(step);
   }
 
@@ -1433,6 +1753,7 @@ function renderGuide(options = {}) {
   if (target && options.scroll !== false) {
     target.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
   }
+  scheduleTranslations();
   window.setTimeout(positionGuideOverlay, options.scroll === false ? 0 : 260);
 }
 
@@ -1779,6 +2100,7 @@ function formatCloudDate(value) {
 
 function renderCloudControls() {
   if (!els.cloudSavePanel) return;
+  scheduleTranslations();
   const signedIn = Boolean(state.auth.user);
   els.cloudSavePanel.hidden = !signedIn;
   if (els.saveBtn) els.saveBtn.textContent = signedIn ? "Cloud save" : "Save";
@@ -1869,6 +2191,7 @@ function renderCloudControls() {
 
 function renderSavedSongsPage() {
   if (!els.savedSongsList) return;
+  scheduleTranslations();
   const signedIn = Boolean(state.auth.user);
   els.savedSongsStatus.textContent = signedIn
     ? state.cloud.status
@@ -1960,6 +2283,7 @@ function dashboardEmptyRow(text) {
 
 function renderDashboard() {
   if (!els.dashboardScreen) return;
+  scheduleTranslations();
   const signedIn = Boolean(state.auth.user);
   const stats = state.dashboard.stats;
   const topSheets = stats && Array.isArray(stats.topSheets) ? stats.topSheets : [];
@@ -2246,6 +2570,7 @@ function marketplaceRatingText(sheet) {
 
 function renderMarketplace() {
   if (!els.marketplaceList) return;
+  scheduleTranslations();
   els.marketplaceStatus.textContent = state.marketplace.status;
   els.marketplaceList.innerHTML = "";
 
@@ -4029,6 +4354,7 @@ function renderAll() {
   renderChordAnalysis();
   renderScoreAnalysis();
   offerGuideForCurrentSurface({ auto: false });
+  scheduleTranslations();
 }
 
 function addNoteEvent(notes) {
@@ -10702,6 +11028,9 @@ function bindEvents() {
   if (els.refreshCloudSavesBtn) {
     els.refreshCloudSavesBtn.addEventListener("click", fetchCloudSaves);
   }
+  if (els.languageSelect) {
+    els.languageSelect.addEventListener("change", handleLanguageChange);
+  }
   document.addEventListener("click", (event) => {
     if (els.authShell && !els.authShell.contains(event.target)) closeAuthMenu();
   });
@@ -11046,6 +11375,7 @@ function init() {
   syncControls();
   setAudioResultTab("sheets");
   bindEvents();
+  initLocale();
   renderNavigationState();
   renderAll();
   handleInitialMarketplaceLink();
