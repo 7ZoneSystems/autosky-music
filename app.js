@@ -797,7 +797,18 @@ const UI_TRANSLATION_ROWS = [
   ["this shows current status of your sheet", { ja: "ここにシートの現在状態が表示されます", "zh-CN": "这里显示你的乐谱当前状态", "zh-TW": "這裡顯示你的樂譜目前狀態", ko: "여기에 현재 악보 상태가 표시됩니다", hi: "यह आपकी शीट की मौजूदा स्थिति दिखाता है", es: "esto muestra el estado actual de tu partitura", fr: "ceci affiche l'état actuel de votre partition", de: "Dies zeigt den aktuellen Status deiner Noten", pt: "isto mostra o status atual da sua partitura", id: "ini menampilkan status lembar saat ini", ar: "يعرض هذا الحالة الحالية للنوتة" }],
   ["Marketplace sheet loaded", { ja: "マーケットシートを読み込みました", "zh-CN": "已加载市场乐谱", "zh-TW": "已載入市集樂譜", ko: "마켓 악보 로드됨", hi: "मार्केटप्लेस शीट लोड हुई", es: "Partitura cargada", fr: "Partition chargée", de: "Marktplatz-Noten geladen", pt: "Partitura carregada", id: "Lembar marketplace dimuat", ar: "تم تحميل نوتة السوق" }],
   ["Playback stopped", { ja: "再生停止", "zh-CN": "播放已停止", "zh-TW": "播放已停止", ko: "재생 정지됨", hi: "प्लेबैक रुका", es: "Reproducción detenida", fr: "Lecture arrêtée", de: "Wiedergabe gestoppt", pt: "Reprodução parada", id: "Pemutaran berhenti", ar: "توقف التشغيل" }],
-  ["Playback finished", { ja: "再生完了", "zh-CN": "播放完成", "zh-TW": "播放完成", ko: "재생 완료", hi: "प्लेबैक पूरा", es: "Reproducción finalizada", fr: "Lecture terminée", de: "Wiedergabe beendet", pt: "Reprodução finalizada", id: "Pemutaran selesai", ar: "انتهى التشغيل" }]
+  ["Playback finished", { ja: "再生完了", "zh-CN": "播放完成", "zh-TW": "播放完成", ko: "재생 완료", hi: "प्लेबैक पूरा", es: "Reproducción finalizada", fr: "Lecture terminée", de: "Wiedergabe beendet", pt: "Reprodução finalizada", id: "Pemutaran selesai", ar: "انتهى التشغيل" }],
+  ["Learn", { ja: "練習", "zh-CN": "学习", "zh-TW": "學習", ko: "연습", hi: "सीखें", es: "Aprender", fr: "Apprendre", de: "Lernen", pt: "Aprender", id: "Belajar", ar: "تعلّم" }],
+  ["Learning mode", { ja: "練習モード", "zh-CN": "学习模式", "zh-TW": "學習模式", ko: "학습 모드", hi: "लर्निंग मोड", es: "Modo aprendizaje", fr: "Mode apprentissage", de: "Lernmodus", pt: "Modo aprendizado", id: "Mode belajar", ar: "وضع التعلم" }],
+  ["Practice this Sky sheet", { ja: "このSkyシートを練習", "zh-CN": "练习这张 Sky 谱", "zh-TW": "練習這張 Sky 譜", ko: "이 Sky 악보 연습", hi: "इस Sky शीट का अभ्यास करें", es: "Practica esta partitura Sky", fr: "Pratiquer cette partition Sky", de: "Diese Sky-Noten üben", pt: "Pratique esta partitura Sky", id: "Latih lembar Sky ini", ar: "تدرّب على نوتة Sky هذه" }],
+  ["Press this", { ja: "これを押す", "zh-CN": "按这个", "zh-TW": "按這個", ko: "이 키 누르기", hi: "इसे दबाएँ", es: "Pulsa esto", fr: "Appuyez ici", de: "Das drücken", pt: "Pressione isto", id: "Tekan ini", ar: "اضغط هذا" }],
+  ["Load a sheet first", { ja: "先にシートを読み込んでください", "zh-CN": "请先加载乐谱", "zh-TW": "請先載入樂譜", ko: "먼저 악보를 불러오세요", hi: "पहले शीट लोड करें", es: "Carga una partitura primero", fr: "Chargez d'abord une partition", de: "Erst Noten laden", pt: "Carregue uma partitura primeiro", id: "Muat lembar dulu", ar: "حمّل نوتة أولاً" }],
+  ["Restart", { ja: "再開", "zh-CN": "重新开始", "zh-TW": "重新開始", ko: "다시 시작", hi: "रीस्टार्ट", es: "Reiniciar", fr: "Recommencer", de: "Neu starten", pt: "Reiniciar", id: "Mulai ulang", ar: "إعادة البدء" }],
+  ["Skip note", { ja: "音をスキップ", "zh-CN": "跳过音符", "zh-TW": "跳過音符", ko: "음 건너뛰기", hi: "नोट छोड़ें", es: "Saltar nota", fr: "Sauter la note", de: "Note überspringen", pt: "Pular nota", id: "Lewati nada", ar: "تخطي النغمة" }],
+  ["Learning complete", { ja: "練習完了", "zh-CN": "学习完成", "zh-TW": "學習完成", ko: "학습 완료", hi: "सीखना पूरा", es: "Aprendizaje completo", fr: "Apprentissage terminé", de: "Lernen abgeschlossen", pt: "Aprendizado concluído", id: "Belajar selesai", ar: "اكتمل التعلم" }],
+  ["Learning mode ready", { ja: "練習モード準備完了", "zh-CN": "学习模式已就绪", "zh-TW": "學習模式已就緒", ko: "학습 모드 준비됨", hi: "लर्निंग मोड तैयार", es: "Modo aprendizaje listo", fr: "Mode apprentissage prêt", de: "Lernmodus bereit", pt: "Modo aprendizado pronto", id: "Mode belajar siap", ar: "وضع التعلم جاهز" }],
+  ["Wrong key", { ja: "違うキー", "zh-CN": "按键不对", "zh-TW": "按鍵不對", ko: "잘못된 키", hi: "गलत कुंजी", es: "Tecla incorrecta", fr: "Mauvaise touche", de: "Falsche Taste", pt: "Tecla errada", id: "Tombol salah", ar: "مفتاح خاطئ" }],
+  ["No notes to learn", { ja: "練習する音がありません", "zh-CN": "没有可学习的音符", "zh-TW": "沒有可學習的音符", ko: "연습할 음이 없습니다", hi: "सीखने के लिए नोट नहीं", es: "No hay notas para aprender", fr: "Aucune note à apprendre", de: "Keine Noten zum Lernen", pt: "Sem notas para aprender", id: "Tidak ada nada untuk dipelajari", ar: "لا توجد نغمات للتعلم" }]
 ];
 const UI_TRANSLATIONS = UI_TRANSLATION_ROWS.reduce((tables, [phrase, translations]) => {
   Object.entries(translations).forEach(([language, translated]) => {
@@ -896,6 +907,14 @@ const state = {
     open: false,
     chordMode: false,
     pending: []
+  },
+  learning: {
+    open: false,
+    index: 0,
+    pressed: [],
+    lastWrongId: null,
+    noteIndices: [],
+    sourceLength: 0
   },
   liveStudio: {
     open: false,
@@ -1002,6 +1021,7 @@ const els = {
   clearBtn: document.querySelector("#clearBtn"),
   playBtn: document.querySelector("#playBtn"),
   stopBtn: document.querySelector("#stopBtn"),
+  learnBtn: document.querySelector("#learnBtn"),
   saveBtn: document.querySelector("#saveBtn"),
   loadBtn: document.querySelector("#loadBtn"),
   titleInput: document.querySelector("#titleInput"),
@@ -1099,6 +1119,15 @@ const els = {
   mobileCreatorChordBtn: document.querySelector("#mobileCreatorChordBtn"),
   mobileCreatorGrid: document.querySelector("#mobileCreatorGrid"),
   mobileCreatorAddBtn: document.querySelector("#mobileCreatorAddBtn"),
+  learningOverlay: document.querySelector("#learningOverlay"),
+  learningCloseBtn: document.querySelector("#learningCloseBtn"),
+  learningProgressText: document.querySelector("#learningProgressText"),
+  learningProgressFill: document.querySelector("#learningProgressFill"),
+  learningCurrentView: document.querySelector("#learningCurrentView"),
+  learningUpcomingList: document.querySelector("#learningUpcomingList"),
+  learningGrid: document.querySelector("#learningGrid"),
+  learningRestartBtn: document.querySelector("#learningRestartBtn"),
+  learningSkipBtn: document.querySelector("#learningSkipBtn"),
   liveStudioBtn: document.querySelector("#liveStudioBtn"),
   liveStudioOverlay: document.querySelector("#liveStudioOverlay"),
   liveStudioCloseBtn: document.querySelector("#liveStudioCloseBtn"),
@@ -1137,6 +1166,7 @@ let marketplaceSearchTimer = null;
 let translationFrame = null;
 const originalTextNodes = new WeakMap();
 const skyPianoSampleCache = new Map();
+const SKY_SAMPLE_VERSION = "sky-piano-clean-v2";
 const AUDIO_WIZARD_TIPS = [
   "Sky music tip: leave space between phrases so the 15-button grid can breathe.",
   "For vocal songs, melody sensitivity decides how strongly the lead line is followed.",
@@ -2979,6 +3009,234 @@ function makeMiniGrid(notes) {
   return mini;
 }
 
+function learningNoteIndices() {
+  if (state.learning.open && state.learning.sourceLength === state.events.length) {
+    return state.learning.noteIndices;
+  }
+  const indices = [];
+  state.events.forEach((event, index) => {
+    if (event.type === "note" && Array.isArray(event.notes) && event.notes.length) indices.push(index);
+  });
+  return indices;
+}
+
+function rebuildLearningNoteIndices() {
+  state.learning.noteIndices = [];
+  state.events.forEach((event, index) => {
+    if (event.type === "note" && Array.isArray(event.notes) && event.notes.length) state.learning.noteIndices.push(index);
+  });
+  state.learning.sourceLength = state.events.length;
+  return state.learning.noteIndices;
+}
+
+function currentLearningEvent() {
+  if (!state.learning.open) return null;
+  const event = state.events[state.learning.index];
+  return event && event.type === "note" && Array.isArray(event.notes) && event.notes.length ? event : null;
+}
+
+function nextLearningIndexAfter(index) {
+  const indices = learningNoteIndices();
+  let low = 0;
+  let high = indices.length - 1;
+  let match = indices.length;
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    if (indices[mid] >= index) {
+      match = mid;
+      high = mid - 1;
+    } else {
+      low = mid + 1;
+    }
+  }
+  if (match < indices.length) return indices[match];
+  return state.events.length;
+}
+
+function learningProgressInfo() {
+  const indices = learningNoteIndices();
+  if (!indices.length) return { indices, total: 0, position: 0 };
+  const current = state.learning.index;
+  const exact = indices.indexOf(current);
+  if (exact >= 0) return { indices, total: indices.length, position: exact + 1 };
+  const completed = indices.filter((index) => index < current).length;
+  return { indices, total: indices.length, position: Math.min(indices.length, completed) };
+}
+
+function renderLearningCurrent(event) {
+  if (!els.learningCurrentView) return;
+  els.learningCurrentView.innerHTML = "";
+  if (!event) {
+    const noteCount = learningNoteIndices().length;
+    els.learningCurrentView.textContent = noteCount ? "Learning complete" : state.events.length ? "No notes to learn" : "Load a sheet first";
+    return;
+  }
+
+  const label = document.createElement("strong");
+  label.textContent = eventLabel(event);
+  const meta = document.createElement("span");
+  meta.textContent = `${event.duration || 1} beat${event.duration === 1 ? "" : "s"}`;
+  els.learningCurrentView.append(makeMiniGrid(event.notes), label, meta);
+}
+
+function renderLearningUpcoming(indices) {
+  if (!els.learningUpcomingList) return;
+  els.learningUpcomingList.innerHTML = "";
+  const upcoming = indices.filter((index) => index > state.learning.index).slice(0, 6);
+  upcoming.forEach((index) => {
+    const event = state.events[index];
+    const chip = document.createElement("div");
+    chip.className = "learning-upcoming-chip";
+    chip.append(makeMiniGrid(event.notes));
+    const label = document.createElement("span");
+    label.textContent = eventLabel(event);
+    chip.append(label);
+    els.learningUpcomingList.append(chip);
+  });
+}
+
+function renderLearningGrid() {
+  if (!els.learningGrid) return;
+  const event = currentLearningEvent();
+  const expected = new Set(event ? event.notes : []);
+  const pressed = new Set(state.learning.pressed);
+  els.learningGrid.innerHTML = "";
+
+  SKY_BUTTONS.forEach((button) => {
+    const key = document.createElement("button");
+    key.type = "button";
+    key.className = `sky-key row-${button.row.toLowerCase()}`;
+    key.dataset.id = String(button.id);
+    if (expected.has(button.id)) key.classList.add("learning-target");
+    if (pressed.has(button.id)) key.classList.add("learning-pressed");
+    if (state.learning.lastWrongId === button.id) key.classList.add("learning-wrong");
+    key.setAttribute("aria-label", `${button.abc} ${getCellNote(button.id)}`);
+
+    const main = document.createElement("span");
+    main.className = "main-label";
+    main.textContent = labelForButton(button);
+    const sub = document.createElement("span");
+    sub.className = "sub-label";
+    sub.textContent = state.notation === "note" ? button.abc : getCellNote(button.id);
+    key.append(main, sub);
+    key.addEventListener("pointerdown", (pointerEvent) => {
+      pointerEvent.preventDefault();
+      handleLearningKey(button.id);
+    });
+    key.addEventListener("keydown", (keyboardEvent) => {
+      if (keyboardEvent.key !== "Enter" && keyboardEvent.key !== " ") return;
+      keyboardEvent.preventDefault();
+      handleLearningKey(button.id);
+    });
+    els.learningGrid.append(key);
+  });
+}
+
+function renderLearning() {
+  if (!els.learningOverlay) return;
+  els.learningOverlay.hidden = !state.learning.open;
+  els.learningOverlay.classList.toggle("is-open", state.learning.open);
+  if (!state.learning.open) return;
+
+  const progress = learningProgressInfo();
+  const event = currentLearningEvent();
+  if (els.learningProgressText) {
+    els.learningProgressText.textContent = `${progress.position} / ${progress.total}`;
+  }
+  if (els.learningProgressFill) {
+    const percent = progress.total ? (progress.position / progress.total) * 100 : 0;
+    els.learningProgressFill.style.width = `${Math.max(0, Math.min(100, percent)).toFixed(1)}%`;
+  }
+  renderLearningCurrent(event);
+  renderLearningUpcoming(progress.indices);
+  renderLearningGrid();
+  scheduleTranslations();
+}
+
+function openLearningMode() {
+  stopPlayback();
+  closeMobileCreatorPad();
+  if (state.liveStudio.open) closeLiveStudio();
+  rebuildLearningNoteIndices();
+  const firstIndex = state.learning.noteIndices[0] ?? state.events.length;
+  state.learning.open = true;
+  state.learning.index = firstIndex;
+  state.learning.pressed = [];
+  state.learning.lastWrongId = null;
+  renderTimeline(firstIndex, { followActive: true });
+  renderLearning();
+  setStatus(firstIndex < state.events.length ? "Learning mode ready" : "No notes to learn");
+}
+
+function closeLearningMode() {
+  state.learning.open = false;
+  state.learning.pressed = [];
+  state.learning.lastWrongId = null;
+  renderTimeline();
+  renderLearning();
+}
+
+function restartLearningMode() {
+  rebuildLearningNoteIndices();
+  state.learning.index = state.learning.noteIndices[0] ?? state.events.length;
+  state.learning.pressed = [];
+  state.learning.lastWrongId = null;
+  renderTimeline(state.learning.index, { followActive: true });
+  renderLearning();
+}
+
+function advanceLearningMode() {
+  state.learning.index = nextLearningIndexAfter(state.learning.index + 1);
+  state.learning.pressed = [];
+  state.learning.lastWrongId = null;
+  renderTimeline(state.learning.index < state.events.length ? state.learning.index : -1, { followActive: true });
+  renderLearning();
+  if (state.learning.index >= state.events.length) setStatus("Learning complete");
+}
+
+function handleLearningKey(id) {
+  const event = currentLearningEvent();
+  if (!event) return;
+  playButton(id);
+
+  if (!event.notes.includes(id)) {
+    state.learning.lastWrongId = id;
+    renderLearningGrid();
+    setStatus("Wrong key");
+    window.setTimeout(() => {
+      if (state.learning.lastWrongId === id) {
+        state.learning.lastWrongId = null;
+        renderLearningGrid();
+      }
+    }, 260);
+    return;
+  }
+
+  if (!state.learning.pressed.includes(id)) state.learning.pressed.push(id);
+  state.learning.lastWrongId = null;
+  renderLearningGrid();
+  const pressed = new Set(state.learning.pressed);
+  if (event.notes.every((noteId) => pressed.has(noteId))) {
+    window.setTimeout(advanceLearningMode, event.notes.length > 1 ? 160 : 90);
+  }
+}
+
+function handleLearningKeyboard(event) {
+  if (!state.learning.open || event.repeat) return;
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeLearningMode();
+    return;
+  }
+  const target = event.target;
+  if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
+  const pressedKey = event.key.length === 1 ? event.key.toUpperCase() : event.key;
+  const button = SKY_BUTTONS.find((item) => item.keyboard.toUpperCase() === pressedKey);
+  if (!button) return;
+  event.preventDefault();
+  handleLearningKey(button.id);
+}
+
 function scrollTimelineToActiveTile(tile) {
   if (!tile || !els.timeline) return;
   const timeline = els.timeline;
@@ -4346,9 +4604,10 @@ function renderAll() {
   renderPiano();
   renderPending();
   renderKeyData();
-  renderTimeline();
+  renderTimeline(state.learning.open && state.learning.index < state.events.length ? state.learning.index : -1);
   renderScorePanelState();
   renderMobileCreatorPad();
+  renderLearning();
   renderLiveStudio();
   renderExport();
   renderChordAnalysis();
@@ -10492,32 +10751,34 @@ function flashPianoKey(id, milliseconds = 150) {
 }
 
 function skySampleCacheKey(ctx, frequency) {
-  return `${ctx.sampleRate}:${Math.round(frequency * 100)}`;
+  return `${SKY_SAMPLE_VERSION}:${ctx.sampleRate}:${Math.round(frequency * 100)}`;
 }
 
 function createSkyPianoSample(ctx, frequency) {
-  const seconds = frequency > 1200 ? 1.9 : frequency > 700 ? 2.35 : 2.85;
+  const seconds = frequency > 1200 ? 1.78 : frequency > 700 ? 2.12 : 2.36;
   const length = Math.max(1, Math.floor(ctx.sampleRate * seconds));
   const buffer = ctx.createBuffer(2, length, ctx.sampleRate);
-  const attackSeconds = 0.0038;
-  const bodyDecay = frequency > 1100 ? 3.55 : frequency > 700 ? 2.7 : 2.15;
-  const tailDecay = frequency > 1100 ? 1.55 : frequency > 700 ? 1.25 : 1.02;
+  const attackSeconds = 0.0028;
+  const bodyDecay = frequency > 1100 ? 4.15 : frequency > 700 ? 3.25 : 2.75;
+  const tailDecay = frequency > 1100 ? 2.05 : frequency > 700 ? 1.82 : 1.62;
   let peak = 0.0001;
   const mono = new Float32Array(length);
 
   for (let index = 0; index < length; index += 1) {
     const time = index / ctx.sampleRate;
     const attack = Math.min(1, time / attackSeconds);
-    const fadeOut = Math.min(1, (seconds - time) / 0.12);
+    const fadeOut = Math.min(1, (seconds - time) / 0.09);
     const envelope = attack * Math.max(0, fadeOut);
     const body = Math.exp(-time * bodyDecay);
     const tail = Math.exp(-time * tailDecay);
-    const hammer = Math.exp(-time * 42);
-    const fundamental = Math.sin(TWO_PI * frequency * time) * (0.66 * body + 0.16 * tail);
-    const octave = Math.sin(TWO_PI * frequency * 2 * time + 0.18) * 0.082 * Math.exp(-time * 5.6);
-    const third = Math.sin(TWO_PI * frequency * 3 * time + 0.52) * 0.018 * Math.exp(-time * 8.8);
-    const hammerTone = Math.sin(TWO_PI * frequency * 4 * time + 0.74) * 0.016 * hammer;
-    const value = (fundamental + octave + third + hammerTone) * envelope;
+    const hammer = Math.exp(-time * 58);
+    const lowNote = frequency < 420;
+    const fundamental = Math.sin(TWO_PI * frequency * time) * ((lowNote ? 0.74 : 0.68) * body + (lowNote ? 0.07 : 0.11) * tail);
+    const octave = Math.sin(TWO_PI * frequency * 2 * time + 0.11) * (lowNote ? 0.038 : 0.058) * Math.exp(-time * 7.2);
+    const fifth = Math.sin(TWO_PI * frequency * 1.5 * time + 0.37) * (lowNote ? 0.018 : 0.012) * Math.exp(-time * 9.2);
+    const third = Math.sin(TWO_PI * frequency * 3 * time + 0.42) * (lowNote ? 0.006 : 0.011) * Math.exp(-time * 11.8);
+    const hammerTone = Math.sin(TWO_PI * frequency * 5.02 * time + 0.74) * 0.014 * hammer;
+    const value = (fundamental + octave + fifth + third + hammerTone) * envelope;
     mono[index] = value;
     peak = Math.max(peak, Math.abs(value));
   }
@@ -10713,7 +10974,7 @@ function playButton(id) {
 }
 
 function stopPlayback() {
-  const hadPlayback = Boolean(activePlaybackSource || state.guide.flags.playbackStarted);
+  const hadPlayback = Boolean(activePlaybackSource || playbackScheduler || state.guide.flags.playbackStarted);
   playbackSessionId += 1;
   if (playbackScheduler) {
     window.clearInterval(playbackScheduler);
@@ -10793,6 +11054,94 @@ function schedulePlaybackVisual(callback, eventTime, ctx) {
   scheduledTimers.push(window.setTimeout(callback, delay));
 }
 
+function shouldUseStreamedPlayback(playback) {
+  const cores = Number(navigator.hardwareConcurrency) || 4;
+  return playback.totalSeconds > 85 || playback.items.length > 180 || cores <= 4;
+}
+
+function schedulePlaybackItemAudio(item, startTime, ctx) {
+  const event = item.event;
+  if (event.type !== "note" || !Array.isArray(event.notes) || !event.notes.length) return;
+  const eventTime = startTime + item.time;
+  const noteCount = Math.max(1, event.notes.length);
+  const level = Math.min(0.96, 1 / Math.pow(noteCount, 0.42));
+  event.notes.forEach((id) => {
+    playTone(frequencyForButton(id), eventTime, item.durationSeconds, { level });
+  });
+}
+
+function schedulePlaybackItemVisual(item, startTime, ctx) {
+  const event = item.event;
+  const eventTime = startTime + item.time;
+  if (event.type === "note") {
+    const eventSeconds = item.durationSeconds;
+    event.notes.forEach((id) => {
+      schedulePlaybackVisual(() => {
+        flashPianoKey(id, Math.min(190, Math.max(90, eventSeconds * 240)));
+      }, eventTime, ctx);
+    });
+  }
+  schedulePlaybackVisual(() => renderTimeline(item.index, { followActive: true }), eventTime, ctx);
+}
+
+function finishPlaybackSession(sessionId) {
+  if (playbackSessionId !== sessionId) return;
+  if (playbackScheduler) {
+    window.clearInterval(playbackScheduler);
+    playbackScheduler = null;
+  }
+  activePlaybackSource = null;
+  renderTimeline();
+  setStatus("Playback finished");
+  notifyGuideEvent("playback-stopped");
+}
+
+function playRenderedPlayback(rendered, playback, ctx, sessionId, cacheSummary) {
+  const source = ctx.createBufferSource();
+  source.buffer = rendered.buffer;
+  source.connect(getAudioGraph().input);
+  activePlaybackSource = source;
+
+  const startTime = ctx.currentTime + 0.08;
+  playback.items.forEach((item) => schedulePlaybackItemVisual(item, startTime, ctx));
+
+  source.onended = () => finishPlaybackSession(sessionId);
+  source.start(startTime);
+  notifyGuideEvent("playback-started");
+  setStatus(rendered.cached
+    ? "Playing pre-rendered cached audio"
+    : cacheSummary.generated
+      ? "Playing newly rendered cached audio"
+      : "Playing rendered cached audio");
+}
+
+function playStreamedPlayback(playback, ctx, sessionId, cacheSummary) {
+  const startTime = ctx.currentTime + 0.08;
+  const lookaheadSeconds = Math.min(2.4, Math.max(0.9, playback.totalSeconds * 0.02));
+  let cursor = 0;
+
+  function pump() {
+    if (playbackSessionId !== sessionId) return;
+    const scheduleUntil = ctx.currentTime - startTime + lookaheadSeconds;
+    while (cursor < playback.items.length && playback.items[cursor].time <= scheduleUntil) {
+      const item = playback.items[cursor];
+      schedulePlaybackItemAudio(item, startTime, ctx);
+      schedulePlaybackItemVisual(item, startTime, ctx);
+      cursor += 1;
+    }
+    if (cursor >= playback.items.length && playbackScheduler) {
+      window.clearInterval(playbackScheduler);
+      playbackScheduler = null;
+    }
+  }
+
+  playbackScheduler = window.setInterval(pump, 90);
+  pump();
+  scheduledTimers.push(window.setTimeout(() => finishPlaybackSession(sessionId), Math.max(120, (playback.totalSeconds + 3.1) * 1000)));
+  notifyGuideEvent("playback-started");
+  setStatus(cacheSummary.generated ? "Playing optimized cached samples" : "Playing optimized streamed audio");
+}
+
 async function playSheet() {
   stopPlayback();
   if (!state.events.length) return;
@@ -10813,6 +11162,11 @@ async function playSheet() {
   });
   if (playbackSessionId !== sessionId) return;
 
+  if (shouldUseStreamedPlayback(playback)) {
+    playStreamedPlayback(playback, ctx, sessionId, cacheSummary);
+    return;
+  }
+
   let rendered;
   try {
     rendered = await getRenderedPlaybackAudio(state.events, playback, ctx);
@@ -10822,48 +11176,7 @@ async function playSheet() {
     return;
   }
   if (playbackSessionId !== sessionId) return;
-
-  const source = ctx.createBufferSource();
-  source.buffer = rendered.buffer;
-  source.connect(getAudioGraph().input);
-  activePlaybackSource = source;
-
-  const startTime = ctx.currentTime + 0.08;
-
-  function scheduleVisualItem(item) {
-    const event = item.event;
-    const eventTime = startTime + item.time;
-    if (event.type === "note") {
-      const eventSeconds = item.durationSeconds;
-      event.notes.forEach((id) => {
-        schedulePlaybackVisual(() => {
-          flashPianoKey(id, Math.min(190, Math.max(90, eventSeconds * 240)));
-        }, eventTime, ctx);
-      });
-      schedulePlaybackVisual(() => renderTimeline(item.index, { followActive: true }), eventTime, ctx);
-      return;
-    }
-
-    schedulePlaybackVisual(() => renderTimeline(item.index, { followActive: true }), eventTime, ctx);
-  }
-
-  playback.items.forEach(scheduleVisualItem);
-
-  source.onended = () => {
-    if (playbackSessionId !== sessionId) return;
-    activePlaybackSource = null;
-    renderTimeline();
-    setStatus("Playback finished");
-    notifyGuideEvent("playback-stopped");
-  };
-
-  source.start(startTime);
-  notifyGuideEvent("playback-started");
-  setStatus(rendered.cached
-    ? "Playing pre-rendered cached audio"
-    : cacheSummary.generated
-      ? "Playing newly rendered cached audio"
-      : "Playing rendered cached audio");
+  playRenderedPlayback(rendered, playback, ctx, sessionId, cacheSummary);
 }
 
 function saveLocalSheet() {
@@ -11034,6 +11347,7 @@ function bindEvents() {
   document.addEventListener("click", (event) => {
     if (els.authShell && !els.authShell.contains(event.target)) closeAuthMenu();
   });
+  document.addEventListener("keydown", handleLearningKeyboard);
   els.tryItOutBtn.addEventListener("click", handleTryItOut);
   els.loginGateGoogleBtn.addEventListener("click", continueWithGoogleFromGate);
   els.loginGateGuestBtn.addEventListener("click", continueWithoutLogin);
@@ -11238,6 +11552,18 @@ function bindEvents() {
     stopPlayback();
     setStatus("Playback stopped");
   });
+  if (els.learnBtn) {
+    els.learnBtn.addEventListener("click", openLearningMode);
+  }
+  if (els.learningCloseBtn) {
+    els.learningCloseBtn.addEventListener("click", closeLearningMode);
+  }
+  if (els.learningRestartBtn) {
+    els.learningRestartBtn.addEventListener("click", restartLearningMode);
+  }
+  if (els.learningSkipBtn) {
+    els.learningSkipBtn.addEventListener("click", advanceLearningMode);
+  }
   els.saveBtn.addEventListener("click", saveSheet);
   els.loadBtn.addEventListener("click", loadSheet);
   els.importAbcBtn.addEventListener("click", () => importSheet("abc"));

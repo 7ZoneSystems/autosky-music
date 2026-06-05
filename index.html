@@ -414,6 +414,7 @@
             <div class="transport">
               <button id="playBtn" class="primary-button" type="button">Play</button>
               <button id="stopBtn" class="ghost-button" type="button">Stop</button>
+              <button id="learnBtn" class="ghost-button" type="button">Learn</button>
               <button id="liveStudioBtn" class="ghost-button live-studio-action" type="button">Live studio</button>
               <button id="audioSheetRegenerateBtn" class="ghost-button" type="button">Regenerate</button>
               <button id="audioSheetGenerateNewBtn" class="ghost-button" type="button">Generate new</button>
@@ -1031,6 +1032,34 @@
 
         <p id="liveStudioHint" class="live-studio-hint">Press Start, then play naturally. Step, rests, and fast different-key chords are detected automatically.</p>
         <div id="liveStudioGrid" class="live-studio-grid" aria-label="Live studio Sky piano buttons"></div>
+      </section>
+    </div>
+
+    <div id="learningOverlay" class="learning-overlay" hidden>
+      <section class="learning-panel" role="dialog" aria-modal="true" aria-labelledby="learningTitle">
+        <div class="learning-head">
+          <div>
+            <span class="eyebrow">Learning mode</span>
+            <h2 id="learningTitle">Practice this Sky sheet</h2>
+          </div>
+          <button id="learningCloseBtn" class="ghost-button" type="button">Close</button>
+        </div>
+        <div class="learning-progress">
+          <span id="learningProgressText">0 / 0</span>
+          <div class="learning-progress-track">
+            <div id="learningProgressFill" class="learning-progress-fill"></div>
+          </div>
+        </div>
+        <div class="learning-current">
+          <span class="eyebrow">Press this</span>
+          <div id="learningCurrentView" class="learning-current-view">Load a sheet first</div>
+        </div>
+        <div id="learningUpcomingList" class="learning-upcoming-list"></div>
+        <div id="learningGrid" class="learning-grid" aria-label="Learning mode Sky piano buttons"></div>
+        <div class="learning-actions">
+          <button id="learningRestartBtn" class="ghost-button" type="button">Restart</button>
+          <button id="learningSkipBtn" class="ghost-button" type="button">Skip note</button>
+        </div>
       </section>
     </div>
 

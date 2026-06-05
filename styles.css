@@ -2366,6 +2366,161 @@ textarea {
   box-shadow: 0 0 0 6px rgba(45, 212, 191, 0.12), 0 16px 34px rgba(23, 32, 51, 0.16);
 }
 
+.learning-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 84;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background:
+    radial-gradient(circle at 84% 84%, rgba(45, 212, 191, 0.18), rgba(115, 167, 255, 0) 35%),
+    rgba(3, 4, 10, 0.78);
+  backdrop-filter: blur(18px);
+}
+
+.learning-overlay[hidden] {
+  display: none;
+}
+
+.learning-panel {
+  display: grid;
+  gap: 14px;
+  width: min(960px, 100%);
+  max-height: min(92vh, 840px);
+  overflow: auto;
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 18px;
+  background: rgba(8, 13, 28, 0.96);
+  box-shadow: 0 30px 110px rgba(0, 0, 0, 0.58), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.learning-head,
+.learning-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.learning-head h2 {
+  margin: 0;
+  color: #ffffff;
+  font-size: clamp(1.3rem, 2vw, 2rem);
+}
+
+.learning-progress {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 12px;
+  color: var(--ink);
+  font-weight: 900;
+}
+
+.learning-progress-track {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.learning-progress-fill {
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--teal), var(--blue), var(--violet));
+  transition: width 180ms ease;
+}
+
+.learning-current {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid rgba(115, 167, 255, 0.18);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.learning-current-view {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  color: #ffffff;
+  font-weight: 900;
+}
+
+.learning-current-view .mini-grid,
+.learning-upcoming-chip .mini-grid {
+  flex: 0 0 auto;
+}
+
+.learning-current-view > strong {
+  font-size: clamp(1.4rem, 4vw, 2.4rem);
+}
+
+.learning-current-view > span {
+  color: var(--muted);
+}
+
+.learning-upcoming-list {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.learning-upcoming-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: max-content;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  color: rgba(246, 248, 255, 0.78);
+  background: rgba(255, 255, 255, 0.06);
+  font-weight: 900;
+}
+
+.learning-grid {
+  --learning-key-size: clamp(58px, min(14vw, 13vh), 128px);
+  display: grid;
+  grid-template-columns: repeat(5, var(--learning-key-size));
+  grid-auto-rows: var(--learning-key-size);
+  justify-content: center;
+  gap: clamp(8px, 1.3vw, 13px);
+  margin: 0 auto;
+}
+
+.learning-grid .sky-key {
+  width: var(--learning-key-size);
+  height: var(--learning-key-size);
+  min-height: 0;
+  touch-action: manipulation;
+  user-select: none;
+}
+
+.learning-grid .sky-key.learning-target {
+  color: #ffffff;
+  background: linear-gradient(135deg, rgba(45, 212, 191, 0.78), rgba(115, 167, 255, 0.72));
+  box-shadow: 0 0 0 6px rgba(45, 212, 191, 0.14), 0 18px 42px rgba(45, 212, 191, 0.2);
+}
+
+.learning-grid .sky-key.learning-pressed {
+  color: #07111f;
+  background: linear-gradient(135deg, #f6c76e, #ffffff);
+}
+
+.learning-grid .sky-key.learning-wrong {
+  color: #ffffff;
+  background: linear-gradient(135deg, rgba(251, 113, 133, 0.92), rgba(167, 139, 250, 0.58));
+  box-shadow: 0 0 0 6px rgba(251, 113, 133, 0.14), 0 18px 42px rgba(251, 113, 133, 0.24);
+}
+
 .guide-layer {
   position: fixed;
   inset: 0;
@@ -3609,6 +3764,27 @@ textarea::placeholder {
 
   .live-studio-grid .sky-key {
     min-height: 0;
+  }
+
+  .learning-overlay {
+    padding: 10px;
+  }
+
+  .learning-panel {
+    gap: 10px;
+    max-height: calc(100vh - 20px);
+    padding: 12px;
+    border-radius: 14px;
+  }
+
+  .learning-progress {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .learning-grid {
+    --learning-key-size: clamp(44px, min(18vw, 11vh), 82px);
+    gap: 7px;
   }
 
   .guide-bot-button {
