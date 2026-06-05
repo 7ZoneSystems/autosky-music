@@ -370,6 +370,295 @@ const GUIDE_STEPS = {
   ]
 };
 
+const GUIDE_FLOW_IDS = {
+  loggedOut: "onboardingLoggedOut",
+  loggedIn: "onboardingLoggedIn"
+};
+
+const GUIDE_FLOWS = {
+  [GUIDE_FLOW_IDS.loggedOut]: [
+    {
+      id: "guest-login-choice",
+      selector: "#authLoginBtn",
+      title: "Login unlocks the full tool",
+      text: "You are not logged in. Login lets you translate songs, save online, open creator studio, and publish sheets. Choose Browse marketplace if you only want public sheets.",
+      continueLabel: "Log in",
+      continueAction: "login",
+      closeAfterAction: true,
+      skipLabel: "Browse marketplace",
+      skipAction: "openMarketplace"
+    },
+    {
+      id: "guest-marketplace-open",
+      selector: "#marketplaceBtn",
+      title: "Opening marketplace",
+      text: "Marketplace is public. I will wait until the shared sheet list is open.",
+      waitFor: "marketplaceLoaded",
+      continueLabel: "Waiting..."
+    },
+    {
+      id: "guest-marketplace-play",
+      selector: "[data-guide-action='marketplace-play'], #marketplaceList",
+      title: "Play any shared sheet",
+      text: "Press Play on any marketplace sheet. I will wait until the read-only sheet view opens.",
+      waitFor: "marketplaceOutput",
+      continueLabel: "Waiting for Play"
+    },
+    {
+      id: "guest-sheet-play",
+      selector: "#playBtn",
+      title: "Play the sheet",
+      text: "This is the Play button in sheet view. Use it any time you want to hear the current Sky sheet again.",
+      continueLabel: "Continue"
+    },
+    {
+      id: "guest-sheet-status",
+      selector: "#statusText",
+      title: "Current sheet status",
+      text: "this shows current status of your sheet",
+      continueLabel: "Continue"
+    },
+    {
+      id: "guest-sheet-stop",
+      selector: "#stopBtn",
+      title: "Stop playback",
+      text: "Click Stop when you are done listening. If playback finishes by itself, I will continue too.",
+      waitFor: "playbackStopped",
+      continueLabel: "Waiting for Stop"
+    },
+    {
+      id: "guest-home",
+      selector: "#homeBtn",
+      title: "Go home",
+      text: "Click Home now. For a logged-out user, that is all you can do. For translations, creator studio, cloud saves, and publishing, please log in.",
+      continueLabel: "Go home",
+      continueAction: "goHome"
+    },
+    {
+      id: "guest-finish",
+      selector: "#authLoginBtn",
+      title: "Login when you are ready",
+      text: "You can keep browsing marketplace publicly. Log in when you want translation, cloud saves, or studio access.",
+      continueLabel: "Finish",
+      finish: true
+    }
+  ],
+  [GUIDE_FLOW_IDS.loggedIn]: [
+    {
+      id: "member-start-marketplace",
+      selector: "#marketplaceBtn",
+      title: "Start with a public sheet",
+      text: "First, preview how a marketplace sheet opens. I will wait until the shared list is ready.",
+      continueLabel: "Open marketplace",
+      continueAction: "openMarketplace",
+      waitFor: "marketplaceLoaded"
+    },
+    {
+      id: "member-marketplace-play",
+      selector: "[data-guide-action='marketplace-play'], #marketplaceList",
+      title: "Play any shared sheet",
+      text: "Press Play on any sheet. It opens the normal output view, not full studio.",
+      waitFor: "marketplaceOutput",
+      continueLabel: "Waiting for Play"
+    },
+    {
+      id: "member-sheet-play",
+      selector: "#playBtn",
+      title: "Play the sheet",
+      text: "This is the Play button in sheet view. Use it any time you want to hear the current Sky sheet again.",
+      continueLabel: "Continue"
+    },
+    {
+      id: "member-sheet-status",
+      selector: "#statusText",
+      title: "Current sheet status",
+      text: "this shows current status of your sheet",
+      continueLabel: "Continue"
+    },
+    {
+      id: "member-sheet-stop",
+      selector: "#stopBtn",
+      title: "Stop playback",
+      text: "Click Stop or wait for playback to finish, then we will go to the logged-in workflow.",
+      waitFor: "playbackStopped",
+      continueLabel: "Waiting for Stop"
+    },
+    {
+      id: "member-home",
+      selector: "#homeBtn",
+      title: "Go home",
+      text: "Go home now. From there we will open Dashboard and enter translator mode.",
+      continueLabel: "Go home",
+      continueAction: "goHome"
+    },
+    {
+      id: "member-dashboard",
+      selector: "#dashboardBtn",
+      title: "Open Dashboard",
+      text: "Open Dashboard. It shows your saves, marketplace reach, ratings, and mode choices.",
+      continueLabel: "Open Dashboard",
+      continueAction: "openDashboard",
+      waitFor: "dashboardOpen"
+    },
+    {
+      id: "member-translator",
+      selector: "#dashboardTranslatorBtn",
+      title: "Translator mode",
+      text: "Choose Translator mode to start audio or score conversion.",
+      continueLabel: "Translator mode",
+      continueAction: "openTranslator",
+      waitFor: "homeOpen"
+    },
+    {
+      id: "member-audio-choice",
+      selector: "#chooseAudioBtn",
+      title: "Audio to Sky sheet",
+      text: "Choose Audio to Sky sheet for song translation.",
+      continueLabel: "Open audio wizard",
+      continueAction: "openAudio",
+      waitFor: "audioOpen"
+    },
+    {
+      id: "member-audio-file",
+      selector: "#audioWizardFileInput",
+      title: "Grab a good song audio",
+      text: "Grab a good song audio and attach it here. I will be waiting here until the wizard receives the file.",
+      waitFor: "audioFileSelected",
+      continueLabel: "Waiting for file"
+    },
+    {
+      id: "member-audio-sensitivity",
+      selector: "#audioSensitivityNextBtn",
+      title: "Sensitivity wizard",
+      text: "Now this wizard will guide you. Melody follows the lead line; chord sensitivity decides how much harmony gets folded into playable Sky keys.",
+      continueLabel: "Continue",
+      continueAction: "audioSensitivityNext",
+      waitFor: "audioFeelStep"
+    },
+    {
+      id: "member-audio-feel",
+      selector: "#audioWizardAnalyzeBtn",
+      title: "Feel and timing",
+      text: "Auto BPM, auto key, playability, feel, and timing enhancer are set here. Start checking when ready; I will wait through processing.",
+      continueLabel: "Start checking",
+      continueAction: "audioAnalyze",
+      waitFor: "audioAnalysisDone"
+    },
+    {
+      id: "member-audio-output",
+      selector: "#audioShowOutputBtn",
+      title: "Open final output",
+      text: "The key is selected and the song is ready. Continue to final output.",
+      continueLabel: "Open output",
+      continueAction: "openAudioOutput",
+      waitFor: "audioOutputOpen"
+    },
+    {
+      id: "member-output-tabs",
+      selector: "#audioResultTabs",
+      title: "Output tabs",
+      text: "These upper tabs split the result into playable sheet, song details, and timing maps.",
+      continueLabel: "Show details",
+      continueAction: "showAudioDetails"
+    },
+    {
+      id: "member-output-details",
+      selector: "#audioTabDetailsBtn",
+      title: "Details tab",
+      text: "Details explains detected key, BPM, chord count, melody notes, match score, and self-corrections.",
+      continueLabel: "Show timing",
+      continueAction: "showAudioTiming"
+    },
+    {
+      id: "member-output-timing",
+      selector: "#audioTabTimingBtn",
+      title: "Timing details",
+      text: "Timing details shows maps for when notes, rhythm, and combined boxes land in the arrangement.",
+      continueLabel: "Back to sheet",
+      continueAction: "showAudioSheets"
+    },
+    {
+      id: "member-title",
+      selector: "#titleInput",
+      title: "Name the output",
+      text: "Give the output song a clear title here before saving.",
+      continueLabel: "Next"
+    },
+    {
+      id: "member-transcriber",
+      selector: "#authorInput",
+      title: "Transcriber",
+      text: "Add your transcriber or creator name here. This helps identify your sheet later.",
+      continueLabel: "Next"
+    },
+    {
+      id: "member-cloud-save",
+      selector: "#saveBtn",
+      title: "Make your first cloud save",
+      text: "Cloud save stores this sheet in your account, so it can be retrieved from the web instead of only exported locally.",
+      continueLabel: "Cloud save",
+      continueAction: "saveSheet",
+      waitFor: "cloudSaved"
+    },
+    {
+      id: "member-publish",
+      selector: "[data-guide-action='cloud-upload'], #cloudSavePanel",
+      title: "Publish to marketplace",
+      text: "Now publish the saved sheet to marketplace. After upload, others can view, play, import, and rate it.",
+      continueLabel: "Publish",
+      continueAction: "publishActiveSheet",
+      waitFor: "marketplacePublished"
+    },
+    {
+      id: "member-published",
+      selector: "#marketplaceList",
+      title: "Visible to others",
+      text: "Now this can be viewed by others too. Next we will go back to Dashboard and open Creator Studio.",
+      continueLabel: "Open Dashboard",
+      continueAction: "openDashboard",
+      waitFor: "dashboardOpen"
+    },
+    {
+      id: "member-creator",
+      selector: "#dashboardCreatorBtn",
+      title: "Creator mode",
+      text: "Creator mode opens manual Sky sheet building, score input, and Live Studio.",
+      continueLabel: "Open Creator Studio",
+      continueAction: "openCreator",
+      waitFor: "studioOpen"
+    },
+    {
+      id: "member-studio-key",
+      selector: "#keySelect",
+      title: "Music key",
+      text: "This changes the Sky COTL key layout for the whole sheet.",
+      continueLabel: "Next"
+    },
+    {
+      id: "member-studio-grid",
+      selector: "#pianoGrid, .mobile-add-tile",
+      title: "Sky key input",
+      text: "On PC, use the square 15-key grid. On mobile, tap the plus sheet box and use the landscape-friendly pad.",
+      continueLabel: "Next"
+    },
+    {
+      id: "member-studio-live",
+      selector: "#liveStudioBtn",
+      title: "Live Studio",
+      text: "Live Studio records what you play and turns timing into sheet boxes. Mobile users should rotate to landscape.",
+      continueLabel: "Next"
+    },
+    {
+      id: "member-studio-score",
+      selector: "#scoreToggleBtn",
+      title: "Score importer",
+      text: "Score Sheet To Sky stays minimized until needed. Open it when you want image or PDF sheet conversion.",
+      continueLabel: "Finish",
+      finish: true
+    }
+  ]
+};
+
 const state = {
   converterMode: "landing",
   audioWizardStep: "file",
@@ -380,8 +669,10 @@ const state = {
   guide: {
     surface: "",
     stepIndex: 0,
+    flowId: "",
     promptOpen: false,
     tourOpen: false,
+    flags: {},
     seen: readGuideSeenState()
   },
   auth: {
@@ -841,6 +1132,14 @@ function renderNavigationState() {
   els.backBtn.setAttribute("aria-disabled", hasBackPage ? "false" : "true");
 }
 
+function guideFlowIdForCurrentUser() {
+  return state.auth.user ? GUIDE_FLOW_IDS.loggedIn : GUIDE_FLOW_IDS.loggedOut;
+}
+
+function guideFlowSteps(flowId = state.guide.flowId) {
+  return GUIDE_FLOWS[flowId] || [];
+}
+
 function guideStepsForSurface(surface) {
   return GUIDE_STEPS[surface] || [];
 }
@@ -860,18 +1159,33 @@ function currentGuideSurface() {
 
 function guideTargetElement(step) {
   if (!step || !step.selector) return null;
-  const element = document.querySelector(step.selector);
-  if (!element) return null;
-  const rect = element.getBoundingClientRect();
-  const style = window.getComputedStyle(element);
-  if (style.display === "none" || style.visibility === "hidden" || rect.width <= 0 || rect.height <= 0) return null;
-  return element;
+  let candidates = [];
+  try {
+    candidates = Array.from(document.querySelectorAll(step.selector));
+  } catch {
+    return null;
+  }
+  return candidates.find((element) => {
+    const rect = element.getBoundingClientRect();
+    const style = window.getComputedStyle(element);
+    return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+  }) || null;
 }
 
 function guideVisibleSteps(surface) {
   const steps = guideStepsForSurface(surface);
   const visible = steps.filter((step) => guideTargetElement(step));
   return visible.length ? visible : steps;
+}
+
+function activeGuideSteps() {
+  if (state.guide.flowId) return guideFlowSteps();
+  return guideVisibleSteps(state.guide.surface || currentGuideSurface());
+}
+
+function currentGuideStep() {
+  const steps = activeGuideSteps();
+  return steps[Math.max(0, Math.min(state.guide.stepIndex, steps.length - 1))] || null;
 }
 
 function saveGuideSeenState() {
@@ -892,15 +1206,136 @@ function guideSurfaceLabel(surface) {
   return GUIDE_SURFACE_LABELS[surface] || "Guide";
 }
 
+function guideFlowLabel(flowId = state.guide.flowId) {
+  return flowId === GUIDE_FLOW_IDS.loggedIn ? "Full guide" : "Public guide";
+}
+
 function setGuidePromptText(surface) {
   if (!els.guidePromptText) return;
+  if (surface === "landing" && !state.guide.seen[guideFlowIdForCurrentUser()]) {
+    els.guidePromptText.textContent = state.auth.user
+      ? "I can guide you through marketplace playback, dashboard, audio translation, saving, publishing, and creator studio."
+      : "You are logged out. I can suggest login first, or guide you through the public marketplace path.";
+    return;
+  }
   const label = guideSurfaceLabel(surface).toLowerCase();
   els.guidePromptText.textContent = `I can show what the ${label} page means.`;
 }
 
+function isGuideStepReady(step = currentGuideStep()) {
+  if (!step || !step.waitFor) return true;
+  switch (step.waitFor) {
+    case "marketplaceLoaded":
+      return state.converterMode === "marketplace" && !state.marketplace.loading;
+    case "marketplaceOutput":
+      return state.converterMode === "audio" && document.body.classList.contains("audio-results-open") && state.events.length > 0;
+    case "playbackStarted":
+      return Boolean(state.guide.flags.playbackStarted || activePlaybackSource);
+    case "playbackStopped":
+      return Boolean(state.guide.flags.playbackStopped || (state.guide.flags.playbackStarted && !activePlaybackSource));
+    case "dashboardOpen":
+      return state.converterMode === "dashboard";
+    case "homeOpen":
+      return state.converterMode === "home";
+    case "audioOpen":
+      return state.converterMode === "audio" && !document.body.classList.contains("audio-results-open");
+    case "audioFileSelected":
+      return state.audioWizardStep !== "file" || Boolean(els.audioWizardFileInput?.files?.[0]);
+    case "audioFeelStep":
+      return state.audioWizardStep === "feel";
+    case "audioAnalysisDone":
+      return state.audioWizardStep === "done";
+    case "audioOutputOpen":
+      return state.converterMode === "audio" && document.body.classList.contains("audio-results-open");
+    case "cloudSaved":
+      return Boolean(state.cloud.activeSheetId);
+    case "marketplacePublished":
+      return Boolean(state.guide.flags.marketplacePublished && state.converterMode === "marketplace");
+    case "studioOpen":
+      return state.converterMode === "score";
+    default:
+      return true;
+  }
+}
+
+function guideCanContinue(step = currentGuideStep()) {
+  if (!step) return false;
+  if (step.waitFor && step.continueAction && state.guide.flags.waitingActionId === step.id && !isGuideStepReady(step)) return false;
+  if (step.finish || step.continueAction) {
+    if (step.continueAction === "audioAnalyze" && !els.audioWizardFileInput?.files?.[0]) return false;
+    if (step.continueAction === "publishActiveSheet" && !state.cloud.activeSheetId) return false;
+    return true;
+  }
+  return !step.waitFor || isGuideStepReady(step);
+}
+
+function guideContinueLabel(step = currentGuideStep()) {
+  if (!step) return "Continue";
+  if (step.waitFor && step.continueAction && state.guide.flags.waitingActionId === step.id && !isGuideStepReady(step)) {
+    return "Waiting...";
+  }
+  if (step.waitFor && !isGuideStepReady(step) && !step.continueAction) return step.continueLabel || "Waiting...";
+  return step.continueLabel || (step.finish ? "Finish" : "Continue");
+}
+
+function runGuideAction(action) {
+  switch (action) {
+    case "login":
+      startLogin({ afterToolEntry: true });
+      return;
+    case "openMarketplace":
+      openMarketplace();
+      return;
+    case "goHome":
+      setConverterMode("landing");
+      return;
+    case "openDashboard":
+      openDashboard();
+      return;
+    case "openTranslator":
+      setConverterMode("home");
+      return;
+    case "openAudio":
+      setConverterMode("audio");
+      return;
+    case "audioSensitivityNext":
+      syncAudioWizardControls();
+      setAudioWizardStep("feel");
+      return;
+    case "audioAnalyze":
+      syncAudioWizardControls();
+      setAudioWizardStep("processing");
+      analyzeAudioFile();
+      return;
+    case "openAudioOutput":
+      openAudioResults();
+      return;
+    case "showAudioDetails":
+      setAudioResultTab("details");
+      return;
+    case "showAudioTiming":
+      setAudioResultTab("timing");
+      return;
+    case "showAudioSheets":
+      setAudioResultTab("sheets");
+      return;
+    case "saveSheet":
+      saveSheet();
+      return;
+    case "publishActiveSheet":
+      if (state.cloud.activeSheetId) publishSavedSheet(state.cloud.activeSheetId);
+      return;
+    case "openCreator":
+      setConverterMode("score");
+      return;
+    default:
+      return;
+  }
+}
+
 function positionGuideOverlay() {
   if (!els.guidePopover || !els.guideSpotlight || !state.guide.tourOpen) return;
-  const steps = guideVisibleSteps(state.guide.surface);
+  const steps = activeGuideSteps();
   const step = steps[state.guide.stepIndex] || steps[0];
   const target = guideTargetElement(step);
   if (!target) {
@@ -949,7 +1384,7 @@ function positionGuideOverlay() {
 function renderGuide(options = {}) {
   if (!els.guideLayer) return;
   const surface = state.guide.surface || currentGuideSurface();
-  const steps = guideVisibleSteps(surface);
+  const steps = activeGuideSteps();
   const hasSteps = steps.length > 0;
   const isTourOpen = state.guide.tourOpen && hasSteps;
   const isPromptOpen = state.guide.promptOpen && hasSteps && !isTourOpen;
@@ -966,12 +1401,17 @@ function renderGuide(options = {}) {
   state.guide.stepIndex = Math.max(0, Math.min(state.guide.stepIndex, steps.length - 1));
   const step = steps[state.guide.stepIndex];
   if (els.guideSurfaceLabel) {
-    els.guideSurfaceLabel.textContent = `${guideSurfaceLabel(surface)} · ${state.guide.stepIndex + 1}/${steps.length}`;
+    const label = state.guide.flowId ? guideFlowLabel() : guideSurfaceLabel(surface);
+    els.guideSurfaceLabel.textContent = `${label} · ${state.guide.stepIndex + 1}/${steps.length}`;
   }
   if (els.guideTitle) els.guideTitle.textContent = step.title || "Guide";
   if (els.guideText) els.guideText.textContent = step.text || "";
   if (els.guideBackBtn) els.guideBackBtn.disabled = state.guide.stepIndex === 0;
-  if (els.guideContinueBtn) els.guideContinueBtn.textContent = state.guide.stepIndex === steps.length - 1 ? "Finish" : "Continue";
+  if (els.guideSkipBtn) els.guideSkipBtn.textContent = step.skipLabel || "Skip";
+  if (els.guideContinueBtn) {
+    els.guideContinueBtn.textContent = guideContinueLabel(step);
+    els.guideContinueBtn.disabled = !guideCanContinue(step);
+  }
 
   const target = guideTargetElement(step);
   if (target && options.scroll !== false) {
@@ -980,8 +1420,23 @@ function renderGuide(options = {}) {
   window.setTimeout(positionGuideOverlay, options.scroll === false ? 0 : 260);
 }
 
+function scheduleGuideProgressCheck(delay = 300) {
+  if (!state.guide.flowId || !state.guide.tourOpen) return;
+  const stepIndex = state.guide.stepIndex;
+  window.setTimeout(() => {
+    if (!state.guide.flowId || !state.guide.tourOpen || state.guide.stepIndex !== stepIndex) return;
+    const step = currentGuideStep();
+    if (step?.waitFor && isGuideStepReady(step)) advanceGuideStep();
+  }, delay);
+}
+
 function offerGuideForCurrentSurface(options = {}) {
   if (!els.guideLayer || state.guide.tourOpen) return;
+  if (state.guide.flowId) {
+    renderGuide({ scroll: false });
+    scheduleGuideProgressCheck();
+    return;
+  }
   const surface = currentGuideSurface();
   if (!surface || !guideStepsForSurface(surface).length) {
     state.guide.promptOpen = false;
@@ -994,15 +1449,34 @@ function offerGuideForCurrentSurface(options = {}) {
     state.guide.stepIndex = 0;
     state.guide.promptOpen = false;
   }
-  if (options.forcePrompt || (!state.guide.seen[surface] && options.auto !== false)) {
+  const onboardingFlowId = guideFlowIdForCurrentUser();
+  const shouldOfferOnboarding = surface === "landing" && !state.auth.loading && !state.guide.seen[onboardingFlowId];
+  if (options.forcePrompt || (shouldOfferOnboarding && options.auto !== false)) {
     state.guide.promptOpen = true;
   }
   renderGuide({ scroll: false });
 }
 
+function startGuideFlow(flowId = guideFlowIdForCurrentUser()) {
+  if (!guideFlowSteps(flowId).length) return;
+  state.guide.flowId = flowId;
+  state.guide.surface = currentGuideSurface();
+  state.guide.stepIndex = 0;
+  state.guide.flags = {};
+  state.guide.promptOpen = false;
+  state.guide.tourOpen = true;
+  renderGuide();
+  scheduleGuideProgressCheck();
+}
+
 function startGuide(surface = currentGuideSurface()) {
   const nextSurface = surface || currentGuideSurface();
+  if (nextSurface === "landing" && !state.guide.seen[guideFlowIdForCurrentUser()]) {
+    startGuideFlow();
+    return;
+  }
   if (!nextSurface || !guideStepsForSurface(nextSurface).length) return;
+  state.guide.flowId = "";
   state.guide.surface = nextSurface;
   state.guide.stepIndex = 0;
   state.guide.promptOpen = false;
@@ -1012,13 +1486,59 @@ function startGuide(surface = currentGuideSurface()) {
 
 function closeGuide(markSeen = true) {
   const surface = state.guide.surface;
-  if (markSeen) markGuideSurfaceSeen(surface);
+  const flowId = state.guide.flowId;
+  if (markSeen) {
+    if (flowId) markGuideSurfaceSeen(flowId);
+    else markGuideSurfaceSeen(surface);
+  }
+  state.guide.flowId = "";
   state.guide.promptOpen = false;
   state.guide.tourOpen = false;
+  state.guide.flags = {};
   renderGuide({ scroll: false });
 }
 
+function advanceGuideStep() {
+  const steps = activeGuideSteps();
+  const step = currentGuideStep();
+  if (!steps.length || state.guide.stepIndex >= steps.length - 1 || step?.finish) {
+    closeGuide(true);
+    return;
+  }
+  state.guide.stepIndex += 1;
+  state.guide.flags.waitingActionId = "";
+  renderGuide();
+  scheduleGuideProgressCheck();
+}
+
 function continueGuide() {
+  if (state.guide.flowId) {
+    const step = currentGuideStep();
+    if (!step || !guideCanContinue(step)) {
+      renderGuide({ scroll: false });
+      return;
+    }
+    if (step.finish) {
+      closeGuide(true);
+      return;
+    }
+    if (step.continueAction) {
+      runGuideAction(step.continueAction);
+      if (step.closeAfterAction) {
+        closeGuide(false);
+        return;
+      }
+      if (step.waitFor && !isGuideStepReady(step)) {
+        state.guide.flags.waitingActionId = step.id;
+        renderGuide({ scroll: false });
+        scheduleGuideProgressCheck();
+        return;
+      }
+    }
+    advanceGuideStep();
+    return;
+  }
+
   const steps = guideVisibleSteps(state.guide.surface);
   if (state.guide.stepIndex >= steps.length - 1) {
     closeGuide(true);
@@ -1032,6 +1552,24 @@ function backGuide() {
   if (state.guide.stepIndex <= 0) return;
   state.guide.stepIndex -= 1;
   renderGuide();
+  scheduleGuideProgressCheck();
+}
+
+function skipGuide() {
+  if (state.guide.flowId) {
+    const step = currentGuideStep();
+    if (step?.skipAction) {
+      runGuideAction(step.skipAction);
+      if (step.waitFor && !isGuideStepReady(step)) {
+        renderGuide({ scroll: false });
+        scheduleGuideProgressCheck();
+        return;
+      }
+    }
+    advanceGuideStep();
+    return;
+  }
+  closeGuide(true);
 }
 
 function toggleGuidePrompt() {
@@ -1045,6 +1583,16 @@ function toggleGuidePrompt() {
   state.guide.stepIndex = 0;
   state.guide.promptOpen = !state.guide.promptOpen;
   renderGuide({ scroll: false });
+}
+
+function notifyGuideEvent(eventName) {
+  if (!state.guide.flowId) return;
+  if (eventName === "playback-started") state.guide.flags.playbackStarted = true;
+  if (eventName === "playback-stopped") state.guide.flags.playbackStopped = true;
+  if (eventName === "cloud-saved") state.guide.flags.cloudSaved = true;
+  if (eventName === "marketplace-published") state.guide.flags.marketplacePublished = true;
+  renderGuide({ scroll: false });
+  scheduleGuideProgressCheck(160);
 }
 
 function isPublicMode(mode, options = {}) {
@@ -1095,6 +1643,7 @@ async function loadAuthUser() {
       fetchDashboard({ silent: true });
     }
     if (shouldEnterTool) setConverterMode("dashboard");
+    else window.setTimeout(() => offerGuideForCurrentSurface({ auto: true }), 160);
   }
 }
 
@@ -1286,6 +1835,7 @@ function renderCloudControls() {
     publishButton.type = "button";
     publishButton.className = "mini-button";
     publishButton.textContent = "Upload";
+    publishButton.dataset.guideAction = "cloud-upload";
     publishButton.addEventListener("click", () => publishSavedSheet(sheet.id));
 
     const deleteButton = document.createElement("button");
@@ -1359,6 +1909,7 @@ function renderSavedSongsPage() {
     publishButton.type = "button";
     publishButton.className = "mini-button";
     publishButton.textContent = "Upload to marketplace";
+    publishButton.dataset.guideAction = "cloud-upload";
     publishButton.addEventListener("click", () => publishSavedSheet(sheet.id));
 
     const deleteButton = document.createElement("button");
@@ -1568,6 +2119,7 @@ async function saveCloudSheet() {
     if (!response.ok) throw new Error(payload.error || "Cloud save failed");
     state.cloud.activeSheetId = payload.sheet.id;
     setStatus("Saved to Cohesivity cloud");
+    notifyGuideEvent("cloud-saved");
     await fetchCloudSaves({ silent: true });
   } catch (error) {
     setStatus(error.message || "Cloud save failed");
@@ -1629,6 +2181,7 @@ async function publishSavedSheet(sheetId, options = {}) {
       return;
     }
     setStatus(payload.action === "updated" ? "Updated marketplace sheet" : "Uploaded to marketplace");
+    notifyGuideEvent("marketplace-published");
     state.marketplace.search = "";
     state.marketplace.focusId = payload.sheet && payload.sheet.id ? payload.sheet.id : null;
     if (els.marketplaceSearchInput) els.marketplaceSearchInput.value = "";
@@ -1769,6 +2322,7 @@ function renderMarketplace() {
     playButton.type = "button";
     playButton.className = "ghost-button";
     playButton.textContent = "Play";
+    playButton.dataset.guideAction = "marketplace-play";
     playButton.addEventListener("click", () => loadMarketplaceSheet(sheet.id, { playAfterLoad: true }));
 
     actions.append(importButton, playButton);
@@ -1831,6 +2385,7 @@ async function fetchMarketplace(options = {}) {
   } finally {
     state.marketplace.loading = false;
     renderMarketplace();
+    notifyGuideEvent("marketplace-loaded");
   }
 }
 
@@ -2118,6 +2673,39 @@ function isLiveStudioLandscapeReady() {
   return window.innerWidth >= window.innerHeight;
 }
 
+function updateLiveStudioKeySize() {
+  if (!els.liveStudioGrid) return;
+  if (!state.liveStudio.open || !isLiveStudioLandscapeReady()) {
+    els.liveStudioGrid.style.removeProperty("--live-studio-key-size");
+    return;
+  }
+
+  els.liveStudioGrid.style.removeProperty("--live-studio-key-size");
+  const panel = els.liveStudioGrid.closest(".live-studio-panel");
+  const gridStyles = window.getComputedStyle(els.liveStudioGrid);
+  const panelStyles = panel ? window.getComputedStyle(panel) : null;
+  const columnGap = parseFloat(gridStyles.columnGap || gridStyles.gap) || 8;
+  const rowGap = parseFloat(gridStyles.rowGap || gridStyles.gap) || columnGap;
+  const panelRect = panel ? panel.getBoundingClientRect() : null;
+  const gridRect = els.liveStudioGrid.getBoundingClientRect();
+  const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+  const viewportHeight = document.documentElement.clientHeight || window.innerHeight;
+  const panelPaddingX = panelStyles
+    ? (parseFloat(panelStyles.paddingLeft) || 0) + (parseFloat(panelStyles.paddingRight) || 0)
+    : 0;
+  const widthSpace = Math.max(0, Math.min(panelRect?.width || viewportWidth, viewportWidth) - panelPaddingX);
+  const bottomLimit = Math.min(panelRect?.bottom || viewportHeight, viewportHeight - 10);
+  const heightSpace = Math.max(0, bottomLimit - gridRect.top - 12);
+  const keyFromWidth = (widthSpace - columnGap * 4) / 5;
+  const keyFromHeight = (heightSpace - rowGap * 2) / 3;
+  const sizeLimit = isMobileViewport() ? 118 : 156;
+  const keySize = Math.floor(Math.max(44, Math.min(keyFromWidth, keyFromHeight, sizeLimit)));
+
+  if (Number.isFinite(keySize) && keySize > 0) {
+    els.liveStudioGrid.style.setProperty("--live-studio-key-size", `${keySize}px`);
+  }
+}
+
 function formatLiveStudioTime(seconds) {
   const safeSeconds = Math.max(0, Number(seconds) || 0);
   const minutes = Math.floor(safeSeconds / 60);
@@ -2206,7 +2794,12 @@ function renderLiveStudio() {
         ? "Recording. Step length is being estimated from your spacing while different-key hits auto-group into chords."
         : "Press Start, then play naturally. Step, rests, and fast different-key chords are detected automatically.";
   }
-  if (state.liveStudio.open) renderLiveStudioGrid();
+  if (state.liveStudio.open) {
+    renderLiveStudioGrid();
+    updateLiveStudioKeySize();
+  } else {
+    updateLiveStudioKeySize();
+  }
   renderLiveStudioReadout();
 }
 
@@ -3772,6 +4365,7 @@ function setAudioWizardStep(step) {
   });
   if (nextStep === "processing") updateAudioWizardProgress("Preparing analysis");
   if (nextStep === "done") updateAudioWizardKeySummary();
+  notifyGuideEvent("audio-wizard-step");
 }
 
 function setAudioFinalExportMode(active) {
@@ -3796,7 +4390,15 @@ function openAudioResults() {
   setAudioResultTab("sheets");
   document.body.classList.add("audio-results-open");
   window.scrollTo({ top: 0, behavior: "smooth" });
-  window.setTimeout(() => offerGuideForCurrentSurface({ auto: true }), 280);
+  notifyGuideEvent("audio-output-open");
+  window.setTimeout(() => {
+    if (state.guide.flowId) {
+      renderGuide({ scroll: false });
+      scheduleGuideProgressCheck(120);
+      return;
+    }
+    offerGuideForCurrentSurface({ auto: true });
+  }, 280);
 }
 
 function openMarketplaceOutputView() {
@@ -9769,6 +10371,7 @@ function playButton(id) {
 }
 
 function stopPlayback() {
+  const hadPlayback = Boolean(activePlaybackSource || state.guide.flags.playbackStarted);
   playbackSessionId += 1;
   if (playbackScheduler) {
     window.clearInterval(playbackScheduler);
@@ -9793,6 +10396,7 @@ function stopPlayback() {
   });
   activeOscillators = [];
   renderTimeline();
+  if (hadPlayback) notifyGuideEvent("playback-stopped");
 }
 
 function buildPlaybackItems(events, beatSeconds) {
@@ -9908,9 +10512,11 @@ async function playSheet() {
     activePlaybackSource = null;
     renderTimeline();
     setStatus("Playback finished");
+    notifyGuideEvent("playback-stopped");
   };
 
   source.start(startTime);
+  notifyGuideEvent("playback-started");
   setStatus(rendered.cached
     ? "Playing pre-rendered cached audio"
     : cacheSummary.generated
@@ -10051,7 +10657,15 @@ function setConverterMode(mode, options = {}) {
   }
 
   window.scrollTo({ top: 0, behavior: "smooth" });
-  window.setTimeout(() => offerGuideForCurrentSurface({ auto: true }), 320);
+  window.setTimeout(() => {
+    if (state.guide.flowId) {
+      state.guide.surface = currentGuideSurface();
+      renderGuide({ scroll: false });
+      scheduleGuideProgressCheck(120);
+      return;
+    }
+    offerGuideForCurrentSurface({ auto: true });
+  }, 320);
 }
 
 function bindEvents() {
@@ -10151,7 +10765,7 @@ function bindEvents() {
     els.guideContinueBtn.addEventListener("click", continueGuide);
   }
   if (els.guideSkipBtn) {
-    els.guideSkipBtn.addEventListener("click", () => closeGuide(true));
+    els.guideSkipBtn.addEventListener("click", skipGuide);
   }
   window.addEventListener("resize", () => {
     renderTimeline();
@@ -10181,6 +10795,7 @@ function bindEvents() {
     const file = els.audioWizardFileInput.files && els.audioWizardFileInput.files[0];
     setAudioStatus(file ? `${file.name} ready` : "No MP3 loaded");
     if (file) setAudioWizardStep("sensitivity");
+    notifyGuideEvent("audio-file-selected");
   });
   els.audioSensitivityNextBtn.addEventListener("click", () => {
     syncAudioWizardControls();
