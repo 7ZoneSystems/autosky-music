@@ -398,7 +398,7 @@ const GUIDE_FLOWS = {
     },
     {
       id: "guest-marketplace-play",
-      selector: "[data-guide-action='marketplace-play'], #marketplaceList",
+      selector: "[data-guide-action='marketplace-play']",
       title: "Play any shared sheet",
       text: "Press Play on any marketplace sheet. I will wait until the read-only sheet view opens.",
       waitFor: "marketplaceOutput",
@@ -455,7 +455,7 @@ const GUIDE_FLOWS = {
     },
     {
       id: "member-marketplace-play",
-      selector: "[data-guide-action='marketplace-play'], #marketplaceList",
+      selector: "[data-guide-action='marketplace-play']",
       title: "Play any shared sheet",
       text: "Press Play on any sheet. It opens the normal output view, not full studio.",
       waitFor: "marketplaceOutput",
@@ -1358,22 +1358,38 @@ function positionGuideOverlay() {
   els.guideSpotlight.style.top = `${Math.round(centerY - diameter / 2)}px`;
 
   const popoverRect = els.guidePopover.getBoundingClientRect();
-  const gap = 14;
+  const gap = step?.selector === "[data-guide-action='marketplace-play']" ? 22 : 14;
   const margin = 12;
   const popoverWidth = Math.min(360, window.innerWidth - margin * 2);
-  let left = rect.right + gap;
-  let top = Math.max(margin, centerY - popoverRect.height / 2);
+  const popoverHeight = popoverRect.height || 160;
+  const sideTop = Math.max(margin, Math.min(window.innerHeight - popoverHeight - margin, centerY - popoverHeight / 2));
+  const sidePositions = [
+    { left: rect.right + gap, top: sideTop, fits: rect.right + gap + popoverWidth <= window.innerWidth - margin },
+    { left: rect.left - popoverWidth - gap, top: sideTop, fits: rect.left - popoverWidth - gap >= margin }
+  ];
+  const verticalPositions = [
+    {
+      left: Math.max(margin, Math.min(window.innerWidth - popoverWidth - margin, centerX - popoverWidth / 2)),
+      top: rect.bottom + gap,
+      fits: rect.bottom + gap + popoverHeight <= window.innerHeight - margin
+    },
+    {
+      left: Math.max(margin, Math.min(window.innerWidth - popoverWidth - margin, centerX - popoverWidth / 2)),
+      top: rect.top - popoverHeight - gap,
+      fits: rect.top - popoverHeight - gap >= margin
+    }
+  ];
+  const placement = [...sidePositions, ...verticalPositions].find((candidate) => candidate.fits) || verticalPositions[0];
+  let left = placement.left;
+  let top = placement.top;
 
-  if (left + popoverWidth > window.innerWidth - margin) {
-    left = rect.left - popoverWidth - gap;
-  }
-  if (left < margin) {
-    left = Math.max(margin, Math.min(window.innerWidth - popoverWidth - margin, centerX - popoverWidth / 2));
-    top = rect.bottom + gap;
-  }
   if (top + popoverRect.height > window.innerHeight - margin) {
     top = Math.max(margin, window.innerHeight - popoverRect.height - margin);
   }
+  if (left + popoverWidth > window.innerWidth - margin) {
+    left = Math.max(margin, window.innerWidth - popoverWidth - margin);
+  }
+  left = Math.max(margin, left);
 
   els.guidePopover.style.width = `${popoverWidth}px`;
   els.guidePopover.style.left = `${Math.round(left)}px`;
