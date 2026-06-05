@@ -748,6 +748,27 @@ function renderNavigationState() {
   els.backBtn.setAttribute("aria-disabled", hasBackPage ? "false" : "true");
 }
 
+function isPublicMode(mode, options = {}) {
+  return mode === "landing" ||
+    mode === "login" ||
+    mode === "marketplace" ||
+    (mode === "audio" && options.allowPublicOutput === true);
+}
+
+function requireLoginForMode(mode, options = {}) {
+  if (state.auth.user || isPublicMode(mode, options)) return false;
+  state.auth.pendingToolEntry = true;
+  state.auth.guestMode = false;
+  const message = mode === "score"
+    ? "Login required to import into creator studio"
+    : mode === "dashboard"
+      ? "Login required to open dashboard"
+      : "Login required to use this tool";
+  setStatus(message);
+  setConverterMode("login", { track: options.track });
+  return true;
+}
+
 async function loadAuthUser() {
   renderAuth();
   try {
@@ -790,7 +811,7 @@ function startLogin(options = {}) {
 }
 
 function handleTryItOut() {
-  if (state.auth.user || state.auth.guestMode) {
+  if (state.auth.user) {
     state.auth.pendingToolEntry = false;
     setConverterMode("dashboard");
     return;
@@ -815,11 +836,11 @@ function continueWithGoogleFromGate() {
 }
 
 function continueWithoutLogin() {
-  state.auth.guestMode = true;
+  state.auth.guestMode = false;
   state.auth.pendingToolEntry = false;
   window.sessionStorage.removeItem("sky-after-login");
-  setConverterMode("dashboard");
-  setStatus("Guest mode: save manually or use timed JSON export");
+  setConverterMode("marketplace");
+  setStatus("Marketplace is public. Login required for dashboard and studio.");
 }
 
 async function logoutAuth() {
@@ -1441,7 +1462,8 @@ function renderMarketplace() {
     const importButton = document.createElement("button");
     importButton.type = "button";
     importButton.className = "primary-button";
-    importButton.textContent = "Import";
+    importButton.textContent = state.auth.user ? "Import" : "Login to import";
+    importButton.title = state.auth.user ? "Import into creator studio" : "Login required to import into creator studio";
     importButton.addEventListener("click", () => loadMarketplaceSheet(sheet.id));
 
     const playButton = document.createElement("button");
@@ -1539,6 +1561,11 @@ function scheduleMarketplaceSearch() {
 }
 
 async function loadMarketplaceSheet(id, options = {}) {
+  if (!options.playAfterLoad && !state.auth.user) {
+    setMarketplaceStatus("Login required to import marketplace sheets into creator studio");
+    requireLoginForMode("score");
+    return;
+  }
   setMarketplaceStatus("Loading shared sheet");
   if (options.playAfterLoad) {
     try {
@@ -1556,7 +1583,11 @@ async function loadMarketplaceSheet(id, options = {}) {
     trackMarketplaceImport(id, options.playAfterLoad ? "play" : "import");
     state.cloud.activeSheetId = null;
     applySheetPayload(payload.sheet.payload || {}, "Loaded marketplace sheet");
-    setConverterMode("score");
+    if (options.playAfterLoad) {
+      openMarketplaceOutputView();
+    } else {
+      setConverterMode("score");
+    }
     if (options.playAfterLoad) {
       await nextAnimationFrame();
       playSheet();
@@ -3465,7 +3496,17 @@ function openAudioResults() {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
+function openMarketplaceOutputView() {
+  setConverterMode("audio", { allowPublicOutput: true });
+  openAudioResults();
+  setStatus("Marketplace sheet loaded");
+}
+
 function reopenAudioRegenerationControls() {
+  if (!state.auth.user) {
+    requireLoginForMode("audio");
+    return;
+  }
   syncControls();
   setAudioFinalExportMode(false);
   setAudioWizardStep("sensitivity");
@@ -3473,6 +3514,10 @@ function reopenAudioRegenerationControls() {
 }
 
 function startNewAudioGeneration() {
+  if (!state.auth.user) {
+    requireLoginForMode("audio");
+    return;
+  }
   stopPlayback();
   state.events = [];
   state.pending = [];
@@ -9652,6 +9697,7 @@ function syncControls() {
 
 function setConverterMode(mode, options = {}) {
   const nextMode = ["landing", "login", "home", "dashboard", "audio", "score", "saved", "marketplace"].includes(mode) ? mode : "dashboard";
+  if (requireLoginForMode(nextMode, options)) return;
   const previousMode = state.converterMode;
   if (options.track !== false && previousMode && previousMode !== nextMode) {
     state.navigation.history.push(previousMode);
