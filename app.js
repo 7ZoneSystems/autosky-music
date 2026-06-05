@@ -264,6 +264,7 @@ const LIVE_STUDIO_CHORD_WINDOW_SECONDS = 0.16;
 const LIVE_STUDIO_GRID_STEP = 0.0625;
 const LIVE_STUDIO_MIN_NOTE_BEATS = 0.125;
 const LIVE_STUDIO_MAX_STEP_BEATS = 8;
+const GUIDE_STORAGE_KEY = "sky-guide-seen-surfaces-v1";
 const TWO_PI = Math.PI * 2;
 const KEY_ALIASES = new Map();
 KEY_CONFIGS.forEach((config) => {
@@ -298,12 +299,90 @@ function createEmptyChordAnalysis() {
   };
 }
 
+function readGuideSeenState() {
+  try {
+    return JSON.parse(window.localStorage.getItem(GUIDE_STORAGE_KEY) || "{}") || {};
+  } catch {
+    return {};
+  }
+}
+
+const GUIDE_SURFACE_LABELS = {
+  landing: "Home",
+  home: "Converter choice",
+  dashboard: "Dashboard",
+  marketplace: "Marketplace",
+  saved: "Saved songs",
+  audio: "Audio wizard",
+  output: "Sheet output",
+  studio: "Creator studio",
+  liveStudio: "Live studio"
+};
+
+const GUIDE_STEPS = {
+  landing: [
+    { selector: "#tryItOutBtn", title: "Start here", text: "Try it out takes signed-in users to the dashboard. Logged-out users see the login gate first." },
+    { selector: "#marketplaceBtn", title: "Public marketplace", text: "Marketplace is open for everyone. You can search and play shared sheets without logging in." },
+    { selector: ".landing-feature-showcase", title: "What the app covers", text: "The homepage summarizes audio translation, saved songs, creator tools, and marketplace sharing." }
+  ],
+  home: [
+    { selector: "#chooseAudioBtn", title: "Audio to Sky sheet", text: "Use this when you want the app to translate a song into a playable Sky sheet." },
+    { selector: "#chooseScoreBtn", title: "Piano sheet to Sky sheet", text: "Use this when you have a traditional score image, PDF, or sheet input to convert." }
+  ],
+  dashboard: [
+    { selector: "#dashboardTranslatorBtn", title: "Translator mode", text: "Translator mode takes you to the normal conversion flow for audio or score input." },
+    { selector: "#dashboardCreatorBtn", title: "Creator mode", text: "Creator mode opens the full studio for manual Sky sheet building and score import." },
+    { selector: ".dashboard-stats", title: "Creator stats", text: "When you share sheets, this area tracks imports, people reached, and ratings." }
+  ],
+  marketplace: [
+    { selector: "#marketplaceSearchInput", title: "Search shared sheets", text: "Search by sheet name to find community-created Sky sheets." },
+    { selector: "#marketplaceList", title: "Play or import", text: "Play opens the read-only output view. Import requires login and opens creator studio for editing." },
+    { selector: ".marketplace-rating", title: "Ratings", text: "Signed-in users can rate shared sheets so the best versions rise up." }
+  ],
+  saved: [
+    { selector: "#savedSongsScreen", title: "Private saved songs", text: "Your account-specific saved sheets live here, separate from public marketplace uploads." },
+    { selector: "#refreshSavedSongsBtn", title: "Refresh saves", text: "Refresh pulls your latest cloud sheets before importing or publishing them." }
+  ],
+  audio: [
+    { selector: "#audioWizardFileInput", title: "Choose audio", text: "Attach an MP3 or audio file first. The wizard will then unlock sheet-generation settings." },
+    { selector: "#wizardMelodySensitivityInput", title: "Melody sensitivity", text: "This changes how strongly the output follows the lead line." },
+    { selector: "#wizardChordSensitivityInput", title: "Chord sensitivity", text: "This controls how much accompaniment and harmony is folded into the playable sheet." },
+    { selector: "#audioWizardAnalyzeBtn", title: "Start checking", text: "Start checking runs the translation pipeline using the settings above." }
+  ],
+  output: [
+    { selector: "#audioResultTabs", title: "Output tabs", text: "SHEETS is the playable result. Details and Timing details show analysis and timing maps." },
+    { selector: ".sheet-panel", title: "Generated sheet", text: "This is the Sky sheet output. It auto-scrolls while playing." },
+    { selector: "#playBtn", title: "Playback", text: "Play renders the sheet audio before playback so timing feels smoother." },
+    { selector: "#audioSheetRegenerateBtn", title: "Regenerate", text: "Regenerate keeps your file and lets you retry with different sliders." },
+    { selector: "#saveBtn", title: "Save", text: "Signed-in users save online. Local users can still use export options." }
+  ],
+  studio: [
+    { selector: "#keySelect", title: "Sky key", text: "The selected Sky key changes how the 15-button grid maps notes." },
+    { selector: ".piano-panel", title: "Virtual Sky piano", text: "Tap keys here for manual sheet creation. On mobile, use the plus sheet box flow." },
+    { selector: ".sheet-panel", title: "Sheet boxes", text: "Each box is a note, chord, rest, bar, or line break with timing." },
+    { selector: "#liveStudioBtn", title: "Live studio", text: "Live Studio records what you play and converts your timing into sheet boxes." },
+    { selector: "#scoreToggleBtn", title: "Score importer", text: "Open this section to analyze piano sheet images, PDFs, or score files." }
+  ],
+  liveStudio: [
+    { selector: "#liveStudioStartBtn", title: "Start recording", text: "Press Start, then play naturally. The recorder estimates step lengths automatically." },
+    { selector: "#liveStudioGrid", title: "Live Sky keys", text: "You hear each key while recording. Fast different-key hits are grouped into chords." },
+    { selector: "#liveStudioStopBtn", title: "Stop and convert", text: "Stop converts your live timing into the main sheet." }
+  ]
+};
+
 const state = {
   converterMode: "landing",
   audioWizardStep: "file",
   audioResultTab: "sheets",
   navigation: {
     history: []
+  },
+  guide: {
+    surface: "",
+    stepIndex: 0,
+    promptOpen: false,
+    tourOpen: false,
+    seen: readGuideSeenState()
   },
   auth: {
     loading: true,
@@ -582,7 +661,21 @@ const els = {
   liveStudioTimer: document.querySelector("#liveStudioTimer"),
   liveStudioCount: document.querySelector("#liveStudioCount"),
   liveStudioHint: document.querySelector("#liveStudioHint"),
-  liveStudioGrid: document.querySelector("#liveStudioGrid")
+  liveStudioGrid: document.querySelector("#liveStudioGrid"),
+  guideLayer: document.querySelector("#guideLayer"),
+  guideSpotlight: document.querySelector("#guideSpotlight"),
+  guidePopover: document.querySelector("#guidePopover"),
+  guideSurfaceLabel: document.querySelector("#guideSurfaceLabel"),
+  guideTitle: document.querySelector("#guideTitle"),
+  guideText: document.querySelector("#guideText"),
+  guideBackBtn: document.querySelector("#guideBackBtn"),
+  guideSkipBtn: document.querySelector("#guideSkipBtn"),
+  guideContinueBtn: document.querySelector("#guideContinueBtn"),
+  guidePrompt: document.querySelector("#guidePrompt"),
+  guidePromptText: document.querySelector("#guidePromptText"),
+  guidePromptStartBtn: document.querySelector("#guidePromptStartBtn"),
+  guidePromptSkipBtn: document.querySelector("#guidePromptSkipBtn"),
+  guideBotBtn: document.querySelector("#guideBotBtn")
 };
 
 let audioContext;
@@ -746,6 +839,212 @@ function renderNavigationState() {
   const hasBackPage = state.navigation.history.length > 0;
   els.backBtn.disabled = !hasBackPage;
   els.backBtn.setAttribute("aria-disabled", hasBackPage ? "false" : "true");
+}
+
+function guideStepsForSurface(surface) {
+  return GUIDE_STEPS[surface] || [];
+}
+
+function currentGuideSurface() {
+  if (state.liveStudio.open) return "liveStudio";
+  if (state.converterMode === "audio" && document.body.classList.contains("audio-results-open")) return "output";
+  if (state.converterMode === "score") return "studio";
+  if (state.converterMode === "audio") return "audio";
+  if (state.converterMode === "saved") return "saved";
+  if (state.converterMode === "marketplace") return "marketplace";
+  if (state.converterMode === "dashboard") return "dashboard";
+  if (state.converterMode === "home") return "home";
+  if (state.converterMode === "landing") return "landing";
+  return "";
+}
+
+function guideTargetElement(step) {
+  if (!step || !step.selector) return null;
+  const element = document.querySelector(step.selector);
+  if (!element) return null;
+  const rect = element.getBoundingClientRect();
+  const style = window.getComputedStyle(element);
+  if (style.display === "none" || style.visibility === "hidden" || rect.width <= 0 || rect.height <= 0) return null;
+  return element;
+}
+
+function guideVisibleSteps(surface) {
+  const steps = guideStepsForSurface(surface);
+  const visible = steps.filter((step) => guideTargetElement(step));
+  return visible.length ? visible : steps;
+}
+
+function saveGuideSeenState() {
+  try {
+    window.localStorage.setItem(GUIDE_STORAGE_KEY, JSON.stringify(state.guide.seen));
+  } catch {
+    // Guide storage should never block the app.
+  }
+}
+
+function markGuideSurfaceSeen(surface) {
+  if (!surface) return;
+  state.guide.seen[surface] = true;
+  saveGuideSeenState();
+}
+
+function guideSurfaceLabel(surface) {
+  return GUIDE_SURFACE_LABELS[surface] || "Guide";
+}
+
+function setGuidePromptText(surface) {
+  if (!els.guidePromptText) return;
+  const label = guideSurfaceLabel(surface).toLowerCase();
+  els.guidePromptText.textContent = `I can show what the ${label} page means.`;
+}
+
+function positionGuideOverlay() {
+  if (!els.guidePopover || !els.guideSpotlight || !state.guide.tourOpen) return;
+  const steps = guideVisibleSteps(state.guide.surface);
+  const step = steps[state.guide.stepIndex] || steps[0];
+  const target = guideTargetElement(step);
+  if (!target) {
+    els.guideSpotlight.hidden = true;
+    els.guidePopover.style.left = "16px";
+    els.guidePopover.style.top = "auto";
+    els.guidePopover.style.bottom = "88px";
+    return;
+  }
+
+  const rect = target.getBoundingClientRect();
+  const diameter = Math.min(260, Math.max(64, Math.max(rect.width, rect.height) + 30));
+  const centerX = rect.left + rect.width / 2;
+  const centerY = rect.top + rect.height / 2;
+
+  els.guideSpotlight.hidden = false;
+  els.guideSpotlight.style.width = `${diameter}px`;
+  els.guideSpotlight.style.height = `${diameter}px`;
+  els.guideSpotlight.style.left = `${Math.round(centerX - diameter / 2)}px`;
+  els.guideSpotlight.style.top = `${Math.round(centerY - diameter / 2)}px`;
+
+  const popoverRect = els.guidePopover.getBoundingClientRect();
+  const gap = 14;
+  const margin = 12;
+  const popoverWidth = Math.min(360, window.innerWidth - margin * 2);
+  let left = rect.right + gap;
+  let top = Math.max(margin, centerY - popoverRect.height / 2);
+
+  if (left + popoverWidth > window.innerWidth - margin) {
+    left = rect.left - popoverWidth - gap;
+  }
+  if (left < margin) {
+    left = Math.max(margin, Math.min(window.innerWidth - popoverWidth - margin, centerX - popoverWidth / 2));
+    top = rect.bottom + gap;
+  }
+  if (top + popoverRect.height > window.innerHeight - margin) {
+    top = Math.max(margin, window.innerHeight - popoverRect.height - margin);
+  }
+
+  els.guidePopover.style.width = `${popoverWidth}px`;
+  els.guidePopover.style.left = `${Math.round(left)}px`;
+  els.guidePopover.style.top = `${Math.round(top)}px`;
+  els.guidePopover.style.bottom = "auto";
+}
+
+function renderGuide(options = {}) {
+  if (!els.guideLayer) return;
+  const surface = state.guide.surface || currentGuideSurface();
+  const steps = guideVisibleSteps(surface);
+  const hasSteps = steps.length > 0;
+  const isTourOpen = state.guide.tourOpen && hasSteps;
+  const isPromptOpen = state.guide.promptOpen && hasSteps && !isTourOpen;
+
+  els.guideLayer.classList.toggle("guide-tour-open", isTourOpen);
+  if (els.guidePrompt) els.guidePrompt.hidden = !isPromptOpen;
+  if (els.guidePopover) els.guidePopover.hidden = !isTourOpen;
+  if (els.guideSpotlight) els.guideSpotlight.hidden = !isTourOpen;
+  if (els.guideBotBtn) els.guideBotBtn.classList.toggle("active", isTourOpen || isPromptOpen);
+
+  if (isPromptOpen) setGuidePromptText(surface);
+  if (!isTourOpen) return;
+
+  state.guide.stepIndex = Math.max(0, Math.min(state.guide.stepIndex, steps.length - 1));
+  const step = steps[state.guide.stepIndex];
+  if (els.guideSurfaceLabel) {
+    els.guideSurfaceLabel.textContent = `${guideSurfaceLabel(surface)} · ${state.guide.stepIndex + 1}/${steps.length}`;
+  }
+  if (els.guideTitle) els.guideTitle.textContent = step.title || "Guide";
+  if (els.guideText) els.guideText.textContent = step.text || "";
+  if (els.guideBackBtn) els.guideBackBtn.disabled = state.guide.stepIndex === 0;
+  if (els.guideContinueBtn) els.guideContinueBtn.textContent = state.guide.stepIndex === steps.length - 1 ? "Finish" : "Continue";
+
+  const target = guideTargetElement(step);
+  if (target && options.scroll !== false) {
+    target.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+  }
+  window.setTimeout(positionGuideOverlay, options.scroll === false ? 0 : 260);
+}
+
+function offerGuideForCurrentSurface(options = {}) {
+  if (!els.guideLayer || state.guide.tourOpen) return;
+  const surface = currentGuideSurface();
+  if (!surface || !guideStepsForSurface(surface).length) {
+    state.guide.promptOpen = false;
+    state.guide.surface = "";
+    renderGuide({ scroll: false });
+    return;
+  }
+  if (state.guide.surface !== surface) {
+    state.guide.surface = surface;
+    state.guide.stepIndex = 0;
+    state.guide.promptOpen = false;
+  }
+  if (options.forcePrompt || (!state.guide.seen[surface] && options.auto !== false)) {
+    state.guide.promptOpen = true;
+  }
+  renderGuide({ scroll: false });
+}
+
+function startGuide(surface = currentGuideSurface()) {
+  const nextSurface = surface || currentGuideSurface();
+  if (!nextSurface || !guideStepsForSurface(nextSurface).length) return;
+  state.guide.surface = nextSurface;
+  state.guide.stepIndex = 0;
+  state.guide.promptOpen = false;
+  state.guide.tourOpen = true;
+  renderGuide();
+}
+
+function closeGuide(markSeen = true) {
+  const surface = state.guide.surface;
+  if (markSeen) markGuideSurfaceSeen(surface);
+  state.guide.promptOpen = false;
+  state.guide.tourOpen = false;
+  renderGuide({ scroll: false });
+}
+
+function continueGuide() {
+  const steps = guideVisibleSteps(state.guide.surface);
+  if (state.guide.stepIndex >= steps.length - 1) {
+    closeGuide(true);
+    return;
+  }
+  state.guide.stepIndex += 1;
+  renderGuide();
+}
+
+function backGuide() {
+  if (state.guide.stepIndex <= 0) return;
+  state.guide.stepIndex -= 1;
+  renderGuide();
+}
+
+function toggleGuidePrompt() {
+  if (state.guide.tourOpen) {
+    closeGuide(false);
+    return;
+  }
+  const surface = currentGuideSurface();
+  if (!surface || !guideStepsForSurface(surface).length) return;
+  state.guide.surface = surface;
+  state.guide.stepIndex = 0;
+  state.guide.promptOpen = !state.guide.promptOpen;
+  renderGuide({ scroll: false });
 }
 
 function isPublicMode(mode, options = {}) {
@@ -1923,6 +2222,7 @@ function openLiveStudio() {
   clearLiveStudioTimer();
   renderLiveStudio();
   setStatus(isLiveStudioLandscapeReady() ? "Live studio ready" : "Rotate to landscape for live studio");
+  offerGuideForCurrentSurface({ auto: true });
 }
 
 function closeLiveStudio() {
@@ -1936,6 +2236,7 @@ function closeLiveStudio() {
   clearLiveStudioTimer();
   renderLiveStudio();
   setStatus("Live studio closed");
+  offerGuideForCurrentSurface({ auto: true });
 }
 
 async function startLiveStudio() {
@@ -3118,6 +3419,7 @@ function renderAll() {
   renderExport();
   renderChordAnalysis();
   renderScoreAnalysis();
+  offerGuideForCurrentSurface({ auto: false });
 }
 
 function addNoteEvent(notes) {
@@ -3494,6 +3796,7 @@ function openAudioResults() {
   setAudioResultTab("sheets");
   document.body.classList.add("audio-results-open");
   window.scrollTo({ top: 0, behavior: "smooth" });
+  window.setTimeout(() => offerGuideForCurrentSurface({ auto: true }), 280);
 }
 
 function openMarketplaceOutputView() {
@@ -9748,6 +10051,7 @@ function setConverterMode(mode, options = {}) {
   }
 
   window.scrollTo({ top: 0, behavior: "smooth" });
+  window.setTimeout(() => offerGuideForCurrentSurface({ auto: true }), 320);
 }
 
 function bindEvents() {
@@ -9831,11 +10135,33 @@ function bindEvents() {
   if (els.liveStudioStopBtn) {
     els.liveStudioStopBtn.addEventListener("click", stopLiveStudio);
   }
+  if (els.guideBotBtn) {
+    els.guideBotBtn.addEventListener("click", toggleGuidePrompt);
+  }
+  if (els.guidePromptStartBtn) {
+    els.guidePromptStartBtn.addEventListener("click", () => startGuide(state.guide.surface || currentGuideSurface()));
+  }
+  if (els.guidePromptSkipBtn) {
+    els.guidePromptSkipBtn.addEventListener("click", () => closeGuide(true));
+  }
+  if (els.guideBackBtn) {
+    els.guideBackBtn.addEventListener("click", backGuide);
+  }
+  if (els.guideContinueBtn) {
+    els.guideContinueBtn.addEventListener("click", continueGuide);
+  }
+  if (els.guideSkipBtn) {
+    els.guideSkipBtn.addEventListener("click", () => closeGuide(true));
+  }
   window.addEventListener("resize", () => {
     renderTimeline();
     renderMobileCreatorPad();
     renderLiveStudio();
+    renderGuide({ scroll: false });
   });
+  window.addEventListener("scroll", () => {
+    if (state.guide.tourOpen) positionGuideOverlay();
+  }, { passive: true });
   els.savedSongsBtn.addEventListener("click", openSavedSongs);
   els.marketplaceBtn.addEventListener("click", openMarketplace);
   if (els.refreshSavedSongsBtn) {
@@ -10092,6 +10418,7 @@ function init() {
   renderNavigationState();
   renderAll();
   handleInitialMarketplaceLink();
+  window.setTimeout(() => offerGuideForCurrentSurface({ auto: true }), 360);
   loadAuthUser();
 }
 

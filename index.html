@@ -1016,6 +1016,39 @@
       </section>
     </div>
 
+    <div id="guideLayer" class="guide-layer" aria-live="polite">
+      <div id="guideSpotlight" class="guide-spotlight" hidden></div>
+      <section id="guidePopover" class="guide-popover" role="dialog" aria-modal="false" aria-labelledby="guideTitle" hidden>
+        <span id="guideSurfaceLabel" class="eyebrow">Guide</span>
+        <h2 id="guideTitle">May I help you?</h2>
+        <p id="guideText">I can walk you through this screen.</p>
+        <div class="guide-actions">
+          <button id="guideBackBtn" class="ghost-button" type="button">Back</button>
+          <button id="guideSkipBtn" class="ghost-button" type="button">Skip</button>
+          <button id="guideContinueBtn" class="primary-button" type="button">Continue</button>
+        </div>
+      </section>
+      <section id="guidePrompt" class="guide-prompt" role="dialog" aria-modal="false" aria-labelledby="guidePromptTitle" hidden>
+        <span class="eyebrow">App guide</span>
+        <h2 id="guidePromptTitle">May I help you?</h2>
+        <p id="guidePromptText">I can show what this page is for.</p>
+        <div class="guide-actions">
+          <button id="guidePromptStartBtn" class="primary-button" type="button">Start guide</button>
+          <button id="guidePromptSkipBtn" class="ghost-button" type="button">Skip</button>
+        </div>
+      </section>
+      <button id="guideBotBtn" class="guide-bot-button" type="button" aria-label="Open app guide">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M8 7.5V5.2"></path>
+          <path d="M16 7.5V5.2"></path>
+          <path d="M6.2 8h11.6a2.7 2.7 0 0 1 2.7 2.7v5.8a2.7 2.7 0 0 1-2.7 2.7H6.2a2.7 2.7 0 0 1-2.7-2.7v-5.8A2.7 2.7 0 0 1 6.2 8Z"></path>
+          <path d="M8.5 13h.1"></path>
+          <path d="M15.4 13h.1"></path>
+          <path d="M9.5 16.1h5"></path>
+        </svg>
+      </button>
+    </div>
+
     <script src="app.js"></script>
   </body>
 </html>

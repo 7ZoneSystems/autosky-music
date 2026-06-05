@@ -1059,7 +1059,12 @@ body:not(.view-audio) .audio-wizard-panel,
   .landing-feature-card,
   .landing-feature-flow span::before,
   .feature-note-lane,
-  .feature-note-lane span {
+  .feature-note-lane span,
+  .guide-prompt,
+  .guide-popover,
+  .guide-spotlight,
+  .guide-spotlight::before,
+  .guide-spotlight::after {
     animation: none;
   }
 }
@@ -1226,6 +1231,21 @@ body:not(.view-audio) .audio-wizard-panel,
 
 .live-studio-action {
   display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  line-height: 1;
+  text-align: center;
+}
+
+.live-studio-action::after {
+  content: "";
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #ef4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.14), 0 0 14px rgba(239, 68, 68, 0.45);
 }
 
 .view-score .live-studio-action {
@@ -1988,7 +2008,7 @@ textarea {
   grid-template-columns: repeat(5, minmax(56px, 1fr));
   gap: var(--grid-gap);
   width: 100%;
-  max-width: 720px;
+  max-width: 560px;
   margin: 0 auto;
 }
 
@@ -1997,7 +2017,7 @@ textarea {
   display: grid;
   place-items: center;
   min-width: 0;
-  min-height: clamp(76px, 11vw, 112px);
+  aspect-ratio: 1 / 1;
   padding: 8px;
   border: 1px solid rgba(23, 32, 51, 0.14);
   border-radius: var(--radius);
@@ -2189,7 +2209,7 @@ textarea {
 }
 
 .mobile-creator-grid .sky-key {
-  min-height: 64px;
+  min-height: 0;
 }
 
 .live-studio-overlay {
@@ -2289,7 +2309,7 @@ textarea {
 }
 
 .live-studio-grid .sky-key {
-  min-height: clamp(70px, 9vw, 112px);
+  min-height: 0;
   touch-action: manipulation;
   user-select: none;
 }
@@ -2302,6 +2322,171 @@ textarea {
 .live-studio-grid .sky-key.playing {
   outline-color: rgba(45, 212, 191, 0.82);
   box-shadow: 0 0 0 6px rgba(45, 212, 191, 0.12), 0 16px 34px rgba(23, 32, 51, 0.16);
+}
+
+.guide-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 128;
+  pointer-events: none;
+}
+
+.guide-bot-button {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  color: #ffffff;
+  background: radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.2), rgba(115, 167, 255, 0.4) 34%, rgba(45, 212, 191, 0.22) 72%);
+  box-shadow: 0 20px 56px rgba(0, 0, 0, 0.38), 0 0 0 6px rgba(115, 167, 255, 0.1);
+  pointer-events: auto;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.guide-bot-button:hover,
+.guide-bot-button.active {
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.44), 0 0 0 8px rgba(45, 212, 191, 0.12);
+}
+
+.guide-bot-button svg {
+  width: 28px;
+  height: 28px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.guide-prompt,
+.guide-popover {
+  position: fixed;
+  z-index: 3;
+  width: min(360px, calc(100vw - 24px));
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 18px;
+  color: var(--ink);
+  background: rgba(8, 14, 30, 0.94);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.46), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(18px) saturate(150%);
+  pointer-events: auto;
+}
+
+.guide-prompt {
+  right: 18px;
+  bottom: 82px;
+  animation: guidePromptRise 220ms ease-out both;
+}
+
+.guide-popover {
+  animation: guidePromptRise 180ms ease-out both;
+}
+
+.guide-prompt[hidden],
+.guide-popover[hidden],
+.guide-spotlight[hidden] {
+  display: none;
+}
+
+.guide-prompt h2,
+.guide-popover h2 {
+  margin: 0;
+  color: #ffffff;
+  font-size: 1.2rem;
+  line-height: 1.18;
+}
+
+.guide-prompt p,
+.guide-popover p {
+  margin: 10px 0 0;
+  color: rgba(246, 248, 255, 0.74);
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
+.guide-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.guide-actions .primary-button,
+.guide-actions .ghost-button {
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+}
+
+.guide-spotlight {
+  position: fixed;
+  z-index: 2;
+  border: 2px solid rgba(45, 212, 191, 0.94);
+  border-radius: 999px;
+  box-shadow: 0 0 0 9999px rgba(3, 4, 10, 0.34), 0 0 28px rgba(45, 212, 191, 0.48), inset 0 0 18px rgba(115, 167, 255, 0.24);
+  pointer-events: none;
+  animation: guideCircleCollapse 1.8s cubic-bezier(0.42, 0, 0.24, 1) infinite;
+}
+
+.guide-spotlight::before,
+.guide-spotlight::after {
+  content: "";
+  position: absolute;
+  inset: -11px;
+  border: 1px solid rgba(115, 167, 255, 0.72);
+  border-radius: inherit;
+  animation: guideCirclePulse 1.8s cubic-bezier(0.42, 0, 0.24, 1) infinite;
+}
+
+.guide-spotlight::after {
+  inset: -20px;
+  border-color: rgba(167, 139, 250, 0.5);
+  animation-delay: -0.55s;
+}
+
+@keyframes guidePromptRise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes guideCircleCollapse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  46% {
+    transform: scale(0.88);
+  }
+}
+
+@keyframes guideCirclePulse {
+  0% {
+    opacity: 0.6;
+    transform: scale(1.1);
+  }
+  55% {
+    opacity: 0.95;
+    transform: scale(0.92);
+  }
+  100% {
+    opacity: 0.35;
+    transform: scale(1.18);
+  }
 }
 
 .mini-grid {
@@ -3326,7 +3511,33 @@ textarea::placeholder {
   }
 
   .live-studio-grid .sky-key {
-    min-height: clamp(54px, 18vh, 74px);
+    min-height: 0;
+  }
+
+  .guide-bot-button {
+    right: 12px;
+    bottom: 12px;
+    width: 50px;
+    height: 50px;
+  }
+
+  .guide-prompt {
+    right: 12px;
+    bottom: 74px;
+    width: min(340px, calc(100vw - 24px));
+  }
+
+  .guide-popover {
+    width: min(340px, calc(100vw - 24px));
+  }
+
+  .guide-actions {
+    justify-content: stretch;
+  }
+
+  .guide-actions .primary-button,
+  .guide-actions .ghost-button {
+    flex: 1 1 auto;
   }
 
   .view-score .score-panel {
@@ -3443,7 +3654,7 @@ textarea::placeholder {
   }
 
   .sky-key {
-    min-height: 58px;
+    min-height: 0;
     padding: 4px;
   }
 
